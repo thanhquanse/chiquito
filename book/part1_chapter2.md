@@ -1,6 +1,4 @@
-# THIS PROJECT HAS BEEN SUNSET AND IT IS NOT ACTIVELY MAINTAINED ANYMORE
-
-# Chiquito
+# What is Chiquito?
 
 Chiquito is a high-level structured language for implementing zero knowledge proof applications.
 
@@ -23,7 +21,7 @@ Chiquito allows the developer to think in more high-level and structured abstrac
 
 Chiquito starts from the idea that every zero knowledge proof represents a program (the setup), which can have many computations (the trace) that is proven for a certain input, output and intermediate values (the witness).
 
-The main structured abstraction in chiquito is the **step**. Any computation can be divided in individual steps. A program is represented by a circuit that has one or many **step types**, a particular computation is represented as a series of **step instances** that can have arbitrary order.
+The main structured abstraction in chiquito is the **step**. Any computation can be divided in individual steps. A program is represented by a circuit that has one or many **step types**, a particular computation is represented as a series of **step instances** or **trace steps** that can have arbitrary order.
 
 A step type contains:
  + Setup: a series of constraints or assertions that must hold for a step instance of this type to be valid.
@@ -32,13 +30,6 @@ A step type contains:
 A chiquito circuit contains a trace function that for a given input will generate the step instances in a particular order and use the step type witness generation.
 
 Another important piece of Chiquito are the signals. They represent elements of the witness.
-
-There are several types:
-
- + Internal signals: they are private for a particular step, and cannot be constraints for other steps.
- + Shared signals: they are shared by all steps in the circuit, and they can be constraints for their values on relative step instances (**rotation**). For example, if "a" is a shared signal, you could assert in a step type setup that `a == a.rot(2)` which means that `a` is equal to `a` in the next of the next step (super rotation `+2`).
- + Forward signals: They are like shared signals with the restriction that they can only constrain in the current and the next step instances. For example you could assert `a == a.next()` but you could not assert `a == a.prev()`. Forward signal has the advantage of allowing for witness size optimisations.
- + Fixed signals: Their values are set during setup and cannot change.
 
 Chiquito has many more features, but these are enough to start writing basic circuits.
 
@@ -73,12 +64,13 @@ Planned:
 In research:
  + Signal typing system, which allows statically checking for soundness issues.
  + Folding backend with ProtoStar, HyperNova, and/or others.
+ + Tracers
 
-## Fibonnaci circuit in Chiquito's Python frontend.
+## Fibonacci circuit in PyChiquito.
 
 But better see for yourself:
 
-```python
+```
 class FiboStep(StepType):
     def setup(self: FiboStep):
         self.c = self.internal("c")
@@ -117,52 +109,3 @@ fibo.halo2_mock_prover(fibo_witness)
 ```
 
 This is explained in more detail in the tutorial, but you can see already how concise and clear it is.
-
-
-## Getting Started
-
-### Read the tutorial
-
-All located in the [tutorial](https://github.com/privacy-scaling-explorations/chiquito/tree/main/tutorials) folder.
-
-### Run the tutorial locally
-
-Follow [Part 2: Quick Start](https://github.com/privacy-scaling-explorations/chiquito/blob/main/tutorials/tutorial_pt2.ipynb) of the `tutorial` folder.
-
-### Writing a chiquito circuit in your project
-
-To use chiquito in Python, just need to install it with pip:
-
-```bash
-pip install chiquito
-```
-
-To use chiquito in Rust (TODO)
-
-## Build from source
-
-Chiquito is built in Rust. First [install Rust](https://www.rust-lang.org/tools/install). Then clone this repo and enter the repo directory.
-
-```bash
-git clone https://github.com/privacy-scaling-explorations/chiquito
-cd chiquito
-```
-
-Then to build Python chiquito with maturin
-
-```bash
-python -m venv .env
-source .env/bin/activate
-pip install -r requirements.txt
-maturin develop
-```
-
-# Testing and Links
-
-**API documentation**: `cargo doc --no-deps --package chiquito --open`
-
-Also auto-published here for the latest commit to main: [docs.pecadorplonkish.xyz/](https://docs.pecadorplonkish.xyz/)
-
-# Licenses
-
-MIT OR Apache-2.0
