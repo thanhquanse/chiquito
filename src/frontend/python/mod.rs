@@ -34,6 +34,7 @@ use halo2_proofs::{
     poly::kzg::{commitment::{KZGCommitmentScheme, ParamsKZG},
     multiopen::{ProverGWC, VerifierGWC}, strategy::SingleStrategy}, transcript::{Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer}
 };
+use halo2_proofs::poly::commitment::Params;
 use rand::rngs::OsRng;
 use std::time::Instant;
 use std::{fs::File, io::Write, path::Path, io::BufWriter, io::BufReader};
@@ -198,33 +199,28 @@ pub fn chiquito_halo2_mock_prover(witness_json: &str, rust_id: UUID, k: usize) {
     }
 }
 
-// fn save_params(params: &ParamsKZG<Bn256>, path: &str) -> std::io::Result<()> {
-//     let file = File::create(path)?;
-//     let mut writer = BufWriter::new(file);
-//     params.write(&mut writer)?; // <-- call `write`, not `serialize`
-//     Ok(())
-// }
-
-// fn load_params(path: &str) -> std::io::Result<ParamsKZG<Bn256>> {
-//     let file = File::open(path)?;
-//     let mut reader = BufReader::new(file);
-//     Ok(ParamsKZG::<Bn256>::read(&mut reader)?)
-// }
-
-// pub fn chiquito_create_param_file(param_path: &str, k: u32) -> Result<ParamsKZG<Bn256>, std::io::Error> {
-//     let params_time_start = Instant::now();
+pub fn chiquito_create_param_file(param_path: &str, k: u32) -> Result<ParamsKZG<Bn256>, std::io::Error> {
+    let params_time_start = Instant::now();
     
-//     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
-//     save_params(&params, param_path);
+    let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+    let f = File::create(param_path)?;
+    let mut writer = BufWriter::new(f);
 
-//     println!("Time to generate params {:?}", params_time_start.elapsed());
+    params.write(&mut writer);
 
-//     Ok(params)
-// }
+    println!("Time to generate params {:?}", params_time_start.elapsed());
 
-// pub fn chiquito_read_param_file(param_path: &str) -> ParamsKZG<Bn256> {
-//     return load_params(param_path);
-// }
+    Ok(params)
+}
+
+fn chiquito_read_param_file(param_path: &str) -> Result<ParamsKZG<Bn256>, std::io::Error> {
+    let f = File::open(param_path)?;
+    let mut reader = BufReader::new(f);
+
+    let params = ParamsKZG::<Bn256>::read(&mut reader)?;
+
+    Ok(params)
+}
 
 pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &str, proof_path: &str) {
     let trace_witness: TraceWitness<Fr> =
@@ -235,8 +231,8 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
         assignment_generator.map(|g| g.generate_with_witness(trace_witness)),
     );
 
-    // let params = chiquito_read_param_file(param_path);
-    let params = ParamsKZG::<Bn256>::setup(16, OsRng);
+    // let params = ParamsKZG::<Bn256>::setup(16, OsRng);
+    let params = chiquito_read_param_file(param_path).expect("Failed to read params");;
 
     // Time to generate verification key (vk)
     let params_time_start = Instant::now();
@@ -330,8 +326,8 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
 
     let circuit = ChiquitoHalo2SuperCircuit::new(compiled, super_assignments);
 
-    // let params = chiquito_read_param_file(param_path);
-    let params = ParamsKZG::<Bn256>::setup(16, OsRng);
+    // let paramsams = ParamsKZG::<Bn256>::setup(16, OsRng);
+    let params = chiquito_read_param_file(param_path).expect("Failed to read params");;
 
     // Time to generate verification key (vk)
     let params_time_start = Instant::now();
@@ -2136,12 +2132,7 @@ fn super_circuit_halo2_mock_prover(rust_ids: &PyList, super_witness: &PyDict, k:
 
 #[pyfunction]
 fn create_param_file(path: &PyString, k: &PyLong) {
-    // chiquito_create_param_file(path.to_str().expect("PyString conversion failed."), k.extract().expect("PyLong conversion failed."));
-}
-
-#[pyfunction]
-fn read_param_file(path: &PyString) {
-    // return chiquito_read_param_file(path.to_str().expect("PyString conversion failed."));
+    chiquito_create_param_file(path.to_str().expect("PyString conversion failed."), k.extract().expect("PyLong conversion failed."));
 }
 
 #[pyfunction]
@@ -2201,7 +2192,6 @@ fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ast_map_store, m)?)?;
     m.add_function(wrap_pyfunction!(halo2_mock_prover, m)?)?;
     m.add_function(wrap_pyfunction!(create_param_file, m)?)?;
-    m.add_function(wrap_pyfunction!(read_param_file, m)?)?;
     m.add_function(wrap_pyfunction!(generate_super_circuit_proof_file, m)?)?;
     m.add_function(wrap_pyfunction!(generate_proof_file, m)?)?;
     m.add_function(wrap_pyfunction!(super_circuit_halo2_mock_prover, m)?)?;
