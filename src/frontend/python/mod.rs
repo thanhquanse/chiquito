@@ -28,9 +28,18 @@ use crate::{
 };
 
 use core::result::Result;
-use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use halo2_proofs::{
+    dev::MockProver, halo2curves::bn256::{Bn256, Fr, G1Affine}, 
+    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Circuit, Column, ConstraintSystem, Error, Instance, ProvingKey, Selector, VerifyingKey},
+    poly::kzg::{commitment::{KZGCommitmentScheme, ParamsKZG},
+    multiopen::{ProverGWC, VerifierGWC}, strategy::SingleStrategy}, transcript::{Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer}
+};
+use rand::rngs::OsRng;
+use std::time::Instant;
+use std::{fs::File, io::Write, path::Path, io::BufWriter, io::BufReader};
 use serde::de::{self, Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
 use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
+use bincode;
 
 type CircuitMapStore = (
     SBPIR<Fr, ()>,
@@ -187,6 +196,202 @@ pub fn chiquito_halo2_mock_prover(witness_json: &str, rust_id: UUID, k: usize) {
             println!("{}", failure);
         }
     }
+}
+
+// fn save_params(params: &ParamsKZG<Bn256>, path: &str) -> std::io::Result<()> {
+//     let file = File::create(path)?;
+//     let mut writer = BufWriter::new(file);
+//     params.write(&mut writer)?; // <-- call `write`, not `serialize`
+//     Ok(())
+// }
+
+// fn load_params(path: &str) -> std::io::Result<ParamsKZG<Bn256>> {
+//     let file = File::open(path)?;
+//     let mut reader = BufReader::new(file);
+//     Ok(ParamsKZG::<Bn256>::read(&mut reader)?)
+// }
+
+// pub fn chiquito_create_param_file(param_path: &str, k: u32) -> Result<ParamsKZG<Bn256>, std::io::Error> {
+//     let params_time_start = Instant::now();
+    
+//     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+//     save_params(&params, param_path);
+
+//     println!("Time to generate params {:?}", params_time_start.elapsed());
+
+//     Ok(params)
+// }
+
+// pub fn chiquito_read_param_file(param_path: &str) -> ParamsKZG<Bn256> {
+//     return load_params(param_path);
+// }
+
+pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &str, proof_path: &str) {
+    let trace_witness: TraceWitness<Fr> =
+        serde_json::from_str(witness_json).expect("Json deserialization to TraceWitness failed.");
+    let (_, compiled, assignment_generator) = rust_id_to_halo2(rust_id);
+    let circuit: ChiquitoHalo2Circuit<_> = ChiquitoHalo2Circuit::new(
+        compiled,
+        assignment_generator.map(|g| g.generate_with_witness(trace_witness)),
+    );
+
+    // let params = chiquito_read_param_file(param_path);
+    let params = ParamsKZG::<Bn256>::setup(16, OsRng);
+
+    // Time to generate verification key (vk)
+    let params_time_start = Instant::now();
+    let vk = keygen_vk(&params, &circuit).expect("keygen_vk should not fail");
+    let params_time = params_time_start.elapsed();
+    println!("Time to generate vk {:?}", params_time);
+
+    // Time to generate proving key (pk)
+    let params_time_start = Instant::now();
+    let pk = keygen_pk(&params, vk.clone(), &circuit).expect("keygen_pk should not fail");
+    let params_time = params_time_start.elapsed();
+    println!("Time to generate pk {:?}", params_time);
+
+    // Proof generation
+    // Time to create proof
+    let params_time_start = Instant::now();
+    let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
+    
+    let instances = circuit.instance(); // Public inputs as Vec<Vec<Fr>>
+    let instance_slices: Vec<&[Fr]> = instances.iter().map(|v| v.as_slice()).collect();
+    let final_instances: Vec<&[&[Fr]]> = vec![&instance_slices];
+    let final_instances_ref: &[&[&[Fr]]] = &final_instances;
+
+    create_proof::<KZGCommitmentScheme<Bn256>, ProverGWC<Bn256>, _, _, _, _>(
+        &params,
+        &pk,
+        &[circuit.clone()],
+        &final_instances_ref,
+        OsRng,
+        &mut transcript,
+    )
+    .expect("Proof creation failed");
+
+    let proof = transcript.finalize();
+
+    // Write proof to file
+    File::create(Path::new(proof_path))
+        .expect("Failed to create proof file")
+        .write_all(&proof)
+        .expect("Failed to write proof");
+    println!("Proof written to: {}", proof_path);
+
+    // Proof verification
+     // Time to verify proof
+    let params_time_start = Instant::now();
+    let strategy = SingleStrategy::new(&params);
+    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+    assert!(
+        verify_proof::<KZGCommitmentScheme<Bn256>, VerifierGWC<Bn256>, _, _, _>(
+            &params,
+            pk.get_vk(),
+            strategy,
+            final_instances_ref, // Adjust as necessary
+            &mut transcript
+        )
+        .is_ok(),
+        "Proof verification failed"
+    );
+    let params_time = params_time_start.elapsed();
+    println!("Time to verify proof {:?}", params_time);
+}
+
+pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness: HashMap<UUID, &str>, param_path: &str, proof_path: &str) {
+    let mut super_circuit_ctx = SuperCircuitContext::<Fr, ()>::default();
+
+    // super_circuit def
+    let config = config(SingleRowCellManager {}, SimpleStepSelectorBuilder {});
+    for rust_id in rust_ids.clone() {
+        let circuit_map_store = rust_id_to_halo2(rust_id);
+        let (circuit, _, _) = circuit_map_store;
+        let assignment = super_circuit_ctx.sub_circuit_with_ast(config.clone(), circuit);
+        add_assignment_generator_to_rust_id(assignment, rust_id);
+    }
+
+    let super_circuit = super_circuit_ctx.compile();
+    let compiled = chiquitoSuperCircuit2Halo2(&super_circuit);
+
+    let mut mapping_ctx = MappingContext::default();
+    for rust_id in rust_ids {
+        let circuit_map_store = rust_id_to_halo2(rust_id);
+        let (_, _, assignment_generator) = circuit_map_store;
+
+        if let Some(witness_json) = super_witness.get(&rust_id) {
+            let witness: TraceWitness<Fr> = serde_json::from_str(witness_json)
+                .expect("Json deserialization to TraceWitness failed.");
+            mapping_ctx.map_with_witness(&assignment_generator.unwrap(), witness);
+        }
+    }
+
+    let super_assignments = mapping_ctx.get_super_assignments();
+
+    let circuit = ChiquitoHalo2SuperCircuit::new(compiled, super_assignments);
+
+    // let params = chiquito_read_param_file(param_path);
+    let params = ParamsKZG::<Bn256>::setup(16, OsRng);
+
+    // Time to generate verification key (vk)
+    let params_time_start = Instant::now();
+    let vk = keygen_vk(&params, &circuit).expect("keygen_vk should not fail");
+    let params_time = params_time_start.elapsed();
+    println!("Time to generate vk {:?}", params_time);
+
+    // Time to generate proving key (pk)
+    let params_time_start = Instant::now();
+    let pk = keygen_pk(&params, vk.clone(), &circuit).expect("keygen_pk should not fail");
+    let params_time = params_time_start.elapsed();
+    println!("Time to generate pk {:?}", params_time);
+
+    // Proof generation
+    // Time to create proof
+    let params_time_start = Instant::now();
+    let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
+    
+    let instances = circuit.instance(); // Public inputs as Vec<Vec<Fr>>
+    let instance_slices: Vec<&[Fr]> = instances.iter().map(|v| v.as_slice()).collect();
+    let final_instances: Vec<&[&[Fr]]> = vec![&instance_slices];
+    let final_instances_ref: &[&[&[Fr]]] = &final_instances;
+
+    create_proof::<KZGCommitmentScheme<Bn256>, ProverGWC<Bn256>, _, _, _, _>(
+        &params,
+        &pk,
+        &[circuit.clone()],
+        &final_instances_ref,
+        OsRng,
+        &mut transcript,
+    )
+    .expect("Proof creation failed");
+
+    let proof = transcript.finalize();
+
+    // Write proof to file
+    File::create(Path::new(proof_path))
+        .expect("Failed to create proof file")
+        .write_all(&proof)
+        .expect("Failed to write proof");
+    println!("Proof written to: {}", proof_path);
+
+    // Proof verification
+     // Time to verify proof
+    let params_time_start = Instant::now();
+    let strategy = SingleStrategy::new(&params);
+    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+    assert!(
+        verify_proof::<KZGCommitmentScheme<Bn256>, VerifierGWC<Bn256>, _, _, _>(
+            &params,
+            pk.get_vk(),
+            strategy,
+            final_instances_ref, // Adjust as necessary
+            &mut transcript
+        )
+        .is_ok(),
+        "Proof verification failed"
+    );
+    let params_time = params_time_start.elapsed();
+    println!("Time to verify proof {:?}", params_time);
 }
 
 struct CircuitVisitor;
@@ -1929,6 +2134,64 @@ fn super_circuit_halo2_mock_prover(rust_ids: &PyList, super_witness: &PyDict, k:
     )
 }
 
+#[pyfunction]
+fn create_param_file(path: &PyString, k: &PyLong) {
+    // chiquito_create_param_file(path.to_str().expect("PyString conversion failed."), k.extract().expect("PyLong conversion failed."));
+}
+
+#[pyfunction]
+fn read_param_file(path: &PyString) {
+    // return chiquito_read_param_file(path.to_str().expect("PyString conversion failed."));
+}
+
+#[pyfunction]
+fn generate_proof_file(witness_json: &PyString, rust_id: &PyLong, param_path: &PyString, proof_path: &PyString){
+    chiquito_generate_proof(
+        witness_json.to_str().expect("PyString conversion failed."),
+        rust_id.extract().expect("PyLong conversion failed."),
+        param_path.extract().expect("PyString conversion failed."),
+        proof_path.to_str().expect("PyString conversion failed."),
+    )
+}
+
+#[pyfunction]
+fn generate_super_circuit_proof_file(rust_ids: &PyList, super_witness: &PyDict, param_path: &PyString, proof_path: &PyString) {
+    let uuids = rust_ids
+        .iter()
+        .map(|rust_id| {
+            rust_id
+                .downcast::<PyLong>()
+                .expect("PyAny downcast failed.")
+                .extract()
+                .expect("PyLong conversion failed.")
+        })
+        .collect::<Vec<UUID>>();
+
+    let super_witness = super_witness
+        .iter()
+        .map(|(key, value)| {
+            (
+                key.downcast::<PyLong>()
+                    .expect("PyAny downcast failed.")
+                    .extract()
+                    .expect("PyLong conversion failed."),
+                value
+                    .downcast::<PyString>()
+                    .expect("PyAny downcast failed.")
+                    .to_str()
+                    .expect("PyString conversion failed."),
+            )
+        })
+        .collect::<HashMap<u128, &str>>();
+
+    chiquito_super_circuit_generate_proof(
+        uuids,
+        super_witness,
+        param_path.extract().expect("PyString conversion failed."),
+        proof_path.to_str().expect("PyString conversion failed."),
+    );
+}
+
 #[pymodule]
 fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(convert_and_print_ast, m)?)?;
@@ -1937,6 +2200,10 @@ fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(to_pil, m)?)?;
     m.add_function(wrap_pyfunction!(ast_map_store, m)?)?;
     m.add_function(wrap_pyfunction!(halo2_mock_prover, m)?)?;
+    m.add_function(wrap_pyfunction!(create_param_file, m)?)?;
+    m.add_function(wrap_pyfunction!(read_param_file, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_super_circuit_proof_file, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_proof_file, m)?)?;
     m.add_function(wrap_pyfunction!(super_circuit_halo2_mock_prover, m)?)?;
     Ok(())
 }

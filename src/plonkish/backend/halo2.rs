@@ -406,7 +406,7 @@ impl<F: Field + From<u64> + Hash> h2Circuit<F> for ChiquitoHalo2Circuit<F> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ChiquitoHalo2SuperCircuit<F: Field + From<u64>> {
     sub_circuits: Vec<ChiquitoHalo2<F>>,
     witness: SuperAssignments<F>,
