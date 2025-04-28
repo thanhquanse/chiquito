@@ -30,7 +30,7 @@ use crate::{
 use core::result::Result;
 use halo2_proofs::{
     dev::MockProver, halo2curves::bn256::{Bn256, Fr, G1Affine}, 
-    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Circuit, Column, ConstraintSystem, Error, Instance, ProvingKey, Selector, VerifyingKey},
+    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
     poly::kzg::{commitment::{KZGCommitmentScheme, ParamsKZG},
     multiopen::{ProverGWC, VerifierGWC}, strategy::SingleStrategy}, transcript::{Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer}
 };
@@ -40,7 +40,6 @@ use std::time::Instant;
 use std::{fs::File, io::Write, path::Path, io::BufWriter, io::BufReader};
 use serde::de::{self, Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
 use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
-use bincode;
 
 type CircuitMapStore = (
     SBPIR<Fr, ()>,
@@ -206,7 +205,7 @@ pub fn chiquito_create_param_file(param_path: &str, k: u32) -> Result<ParamsKZG<
     let f = File::create(param_path)?;
     let mut writer = BufWriter::new(f);
 
-    params.write(&mut writer);
+    let _ = params.write(&mut writer);
 
     println!("Time to generate params {:?}", params_time_start.elapsed());
 
@@ -231,8 +230,8 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
         assignment_generator.map(|g| g.generate_with_witness(trace_witness)),
     );
 
-    // let params = ParamsKZG::<Bn256>::setup(16, OsRng);
-    let params = chiquito_read_param_file(param_path).expect("Failed to read params");;
+    println!("INFO: param_path: {param_path}, proof_path: {proof_path}");
+    let params = chiquito_read_param_file(param_path).expect("Failed to read params");
 
     // Time to generate verification key (vk)
     let params_time_start = Instant::now();
@@ -274,6 +273,9 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
         .write_all(&proof)
         .expect("Failed to write proof");
     println!("Proof written to: {}", proof_path);
+
+    let params_time = params_time_start.elapsed();
+    println!("Time to generate proof {:?}", params_time);
 
     // Proof verification
      // Time to verify proof
@@ -326,7 +328,7 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
 
     let circuit = ChiquitoHalo2SuperCircuit::new(compiled, super_assignments);
 
-    // let paramsams = ParamsKZG::<Bn256>::setup(16, OsRng);
+    println!("INFO: param_path: {param_path}, proof_path: {proof_path}");
     let params = chiquito_read_param_file(param_path).expect("Failed to read params");;
 
     // Time to generate verification key (vk)
@@ -369,6 +371,9 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
         .write_all(&proof)
         .expect("Failed to write proof");
     println!("Proof written to: {}", proof_path);
+
+    let params_time = params_time_start.elapsed();
+    println!("Time to generate proof {:?}", params_time);
 
     // Proof verification
      // Time to verify proof
@@ -2132,7 +2137,7 @@ fn super_circuit_halo2_mock_prover(rust_ids: &PyList, super_witness: &PyDict, k:
 
 #[pyfunction]
 fn create_param_file(path: &PyString, k: &PyLong) {
-    chiquito_create_param_file(path.to_str().expect("PyString conversion failed."), k.extract().expect("PyLong conversion failed."));
+    let _ = chiquito_create_param_file(path.to_str().expect("PyString conversion failed."), k.extract().expect("PyLong conversion failed."));
 }
 
 #[pyfunction]
