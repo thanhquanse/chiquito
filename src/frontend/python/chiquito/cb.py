@@ -96,8 +96,11 @@ def eq(lhs: ToConstraint, rhs: ToConstraint) -> Constraint:
         Typing.AntiBooly,
     )
 
-def lteq(a, b) -> int:
+def lteq(a: int, b: int) -> int:
     return rust_chiquito.lteq(a, b)
+
+def neq(a: int, b: int) -> int:
+    return rust_chiquito.neq(a, b)
 
 def select(
     selector: ToConstraint, when_true: ToConstraint, when_false: ToConstraint

@@ -17,7 +17,8 @@ use crate::{
             step_selector::SimpleStepSelectorBuilder,
         },
         ir::{assignments::AssignmentGenerator, sc::MappingContext},
-        comparator::lteq::is_lteq
+        comparator::lteq::is_lteq,
+        comparator::neq::is_lessthan
     },
     poly::Expr,
     sbpir::{
@@ -2052,6 +2053,12 @@ mod tests {
         let rs = is_lteq(3, 2);
         println!("-------Test result------: {rs}");
     }
+
+    #[test]
+    fn test_neq() {
+        let rs = is_lessthan(1, 2);
+        println!("-------Test result------: {rs}");
+    }
 }
 
 #[pyfunction]
@@ -2060,6 +2067,16 @@ fn lteq(lhs: &PyLong, rhs: &PyLong) -> u32 {
     let b = rhs.extract().expect("Error: PyLong rhs (b) conversion failed.");
 
     let rs = is_lteq(a, b);
+
+    return rs;
+}
+
+#[pyfunction]
+fn neq(lhs: &PyLong, rhs: &PyLong) -> u32 {
+    let a = lhs.extract().expect("Error: PyLong lhs (a) conversion failed.");
+    let b = rhs.extract().expect("Error: PyLong rhs (b) conversion failed.");
+
+    let rs = is_lessthan(a, b);
 
     return rs;
 }
@@ -2218,5 +2235,6 @@ fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(generate_proof_file, m)?)?;
     m.add_function(wrap_pyfunction!(super_circuit_halo2_mock_prover, m)?)?;
     m.add_function(wrap_pyfunction!(lteq, m)?)?;
+    m.add_function(wrap_pyfunction!(neq, m)?)?;
     Ok(())
 }
