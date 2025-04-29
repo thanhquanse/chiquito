@@ -17,6 +17,7 @@ use crate::{
             step_selector::SimpleStepSelectorBuilder,
         },
         ir::{assignments::AssignmentGenerator, sc::MappingContext},
+        comparator::lteq::is_lteq
     },
     poly::Expr,
     sbpir::{
@@ -427,12 +428,12 @@ impl<'de> Visitor<'de> for CircuitVisitor {
             println!("key = {}", key);
             match key.as_str() {
                 "step_types" => {
-                    println!("------ Visiting step_types -------");
+                    // println!("------ Visiting step_types -------");
                     if step_types.is_some() {
                         return Err(de::Error::duplicate_field("step_types"));
                     }
                     step_types = Some(map.next_value::<HashMap<UUID, StepType<Fr>>>()?);
-                    println!("step_types = {:#?}", step_types);
+                    // println!("step_types = {:#?}", step_types);
                 }
                 "forward_signals" => {
                     if forward_signals.is_some() {
@@ -2045,6 +2046,22 @@ mod tests {
         let expr: Expr<Fr, Queriable<Fr>> = serde_json::from_str(json).unwrap();
         println!("{:?}", expr);
     }
+
+    #[test]
+    fn test_lteq() {
+        let rs = is_lteq(3, 2);
+        println!("-------Test result------: {rs}");
+    }
+}
+
+#[pyfunction]
+fn lteq(lhs: &PyLong, rhs: &PyLong) -> u32 {
+    let a = lhs.extract().expect("Error: PyLong lhs (a) conversion failed.");
+    let b = rhs.extract().expect("Error: PyLong rhs (b) conversion failed.");
+
+    let rs = is_lteq(a, b);
+
+    return rs;
 }
 
 #[pyfunction]
@@ -2200,5 +2217,6 @@ fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(generate_super_circuit_proof_file, m)?)?;
     m.add_function(wrap_pyfunction!(generate_proof_file, m)?)?;
     m.add_function(wrap_pyfunction!(super_circuit_halo2_mock_prover, m)?)?;
+    m.add_function(wrap_pyfunction!(lteq, m)?)?;
     Ok(())
 }

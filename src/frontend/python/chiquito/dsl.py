@@ -89,6 +89,17 @@ class SuperCircuit:
             list(self.ast.sub_circuits.keys()), witness_json, k
         )
 
+    def create_param_file(self: Circuit, path: str, k: int):
+        if k <= 0:
+            raise ValueError(
+                "ParamGen: must define k greater than zero when calling create_param_file()"
+            )
+        if path is None:
+            raise ValueError(
+                "ParamGen: must define a path to store params when calling create_param_file()"
+            )
+        rust_chiquito.create_param_file(path, k)
+
     def generate_proof_file(self: SuperCircuit, super_witness: Dict[int, TraceWitness], param_path: str, proof_path: str):
         witness_json = {}
         for rust_id, witness in super_witness.items():

@@ -8,6 +8,7 @@ from chiquito.expr import Expr, Const, Neg, to_expr, ToExpr
 from chiquito.query import StepTypeNext
 from chiquito.chiquito_ast import ASTStepType, Lookup
 
+from chiquito import rust_chiquito
 
 class Typing(Enum):
     Unknown = auto()
@@ -95,6 +96,8 @@ def eq(lhs: ToConstraint, rhs: ToConstraint) -> Constraint:
         Typing.AntiBooly,
     )
 
+def lteq(a, b) -> int:
+    return rust_chiquito.lteq(a, b)
 
 def select(
     selector: ToConstraint, when_true: ToConstraint, when_false: ToConstraint
