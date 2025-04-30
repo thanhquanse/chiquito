@@ -192,10 +192,10 @@ pub fn is_lteq(a: u64, b: u64) -> u32 {
     let prover = MockProver::run(16, &lteq_circuit, vec![public_input]).unwrap();
     
     let result = prover.verify();
-    println!("Verification result: {:?}", result); // Debug log
+    // println!("Verification result: {:?}", result); // Debug log
     match result {
         Ok(()) => {
-            println!("Verification succeeded");
+            // println!("Verification succeeded");
             1
         }
         Err(e) => {

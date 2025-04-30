@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::halo2curves::pasta::Fp;
 
-const NUM_BYTES: usize = 5;
+const NUM_BYTES: usize = 10;
 
 pub trait Field: PrimeField<Repr = [u8; 32]> {}
 
@@ -178,7 +178,7 @@ impl<F: Field + Ord> Circuit<F> for LtComparisonCircuit<F> {
     }
 }
 
-pub fn is_lessthan(a: u64, b: u64) -> u32 {
+pub fn is_not_equal(a: u64, b: u64) -> u32 {
     let mut final_rs = 0;
     let lt_circuit_a_b = LtComparisonCircuit::<Fp> {
         a,
@@ -188,7 +188,7 @@ pub fn is_lessthan(a: u64, b: u64) -> u32 {
 
     let public_input = vec![Fp::from(1)];
 
-    let prover_a_b = MockProver::run(16, &lt_circuit_a_b, vec![public_input]).unwrap();
+    let prover_a_b = MockProver::run(19, &lt_circuit_a_b, vec![public_input]).unwrap();
     
     let result_a_b = prover_a_b.verify();
     println!("Verification a_b result: {:?}", result_a_b); // Debug log
@@ -211,14 +211,14 @@ pub fn is_lessthan(a: u64, b: u64) -> u32 {
 
         let public_input = vec![Fp::from(1)];
 
-        let prover_b_a = MockProver::run(16, &lt_circuit_b_a, vec![public_input]).unwrap();
+        let prover_b_a = MockProver::run(19, &lt_circuit_b_a, vec![public_input]).unwrap();
         
         let result_b_a = prover_b_a.verify();
-        println!("Verification b_a result: {:?}", result_b_a); // Debug log
+        // println!("Verification b_a result: {:?}", result_b_a); // Debug log
 
         match result_b_a {
             Ok(()) => {
-                println!("Verification succeeded");
+                // println!("Verification succeeded");
                 final_rs = 1;
             }
             Err(e) => {

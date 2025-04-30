@@ -18,7 +18,7 @@ use crate::{
         },
         ir::{assignments::AssignmentGenerator, sc::MappingContext},
         comparator::lteq::is_lteq,
-        comparator::neq::is_lessthan
+        comparator::neq::is_not_equal
     },
     poly::Expr,
     sbpir::{
@@ -423,10 +423,10 @@ impl<'de> Visitor<'de> for CircuitVisitor {
         let mut q_enable = None;
         let mut id = None;
 
-        println!("------ Visiting map -------");
+        // println!("------ Visiting map -------");
 
         while let Some(key) = map.next_key::<String>()? {
-            println!("key = {}", key);
+            // println!("key = {}", key);
             match key.as_str() {
                 "step_types" => {
                     // println!("------ Visiting step_types -------");
@@ -2056,7 +2056,8 @@ mod tests {
 
     #[test]
     fn test_neq() {
-        let rs = is_lessthan(1, 2);
+        // let rs = is_lessthan(14747347665328045516, 976711286267936480);
+        let rs = is_not_equal(2, 97);
         println!("-------Test result------: {rs}");
     }
 }
@@ -2076,7 +2077,7 @@ fn neq(lhs: &PyLong, rhs: &PyLong) -> u32 {
     let a = lhs.extract().expect("Error: PyLong lhs (a) conversion failed.");
     let b = rhs.extract().expect("Error: PyLong rhs (b) conversion failed.");
 
-    let rs = is_lessthan(a, b);
+    let rs = is_not_equal(a, b);
 
     return rs;
 }
