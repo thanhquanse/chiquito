@@ -166,3 +166,6 @@ Also auto-published here for the latest commit to main: [docs.pecadorplonkish.xy
 # Licenses
 
 MIT OR Apache-2.0
+
+# Fix build type annotation error
+vi /home/shin/.cargo/git/checkouts/zkp-sparql-plonkish-<c1a0bfd5c0d67691/e0125fe>/plonkish_backend/src/backend/hyperplonk/util.rs
