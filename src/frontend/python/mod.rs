@@ -268,8 +268,11 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
     .expect("Proof creation failed");
 
     let proof = transcript.finalize();
+    let params_time = params_time_start.elapsed();
+    println!("Time to generate proof {:?}", params_time);
 
     // Write proof to file
+    let params_time_start = Instant::now();
     File::create(Path::new(proof_path))
         .expect("Failed to create proof file")
         .write_all(&proof)
@@ -277,10 +280,10 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
     println!("Proof written to: {}", proof_path);
 
     let params_time = params_time_start.elapsed();
-    println!("Time to generate proof {:?}", params_time);
+    println!("Time to write proof to file {:?}", params_time);
 
     // Proof verification
-     // Time to verify proof
+    // Time to verify proof
     let params_time_start = Instant::now();
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
