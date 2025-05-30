@@ -248,8 +248,6 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
     println!("Time to generate pk {:?}", params_time);
 
     // Proof generation
-    // Time to create proof
-    let params_time_start = Instant::now();
     let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
     
     let instances = circuit.instance(); // Public inputs as Vec<Vec<Fr>>
@@ -257,6 +255,8 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
     let final_instances: Vec<&[&[Fr]]> = vec![&instance_slices];
     let final_instances_ref: &[&[&[Fr]]] = &final_instances;
 
+    // Time to create proof
+    let params_time_start = Instant::now();
     create_proof::<KZGCommitmentScheme<Bn256>, ProverGWC<Bn256>, _, _, _, _>(
         &params,
         &pk,
@@ -283,10 +283,10 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
     println!("Time to write proof to file {:?}", params_time);
 
     // Proof verification
-    // Time to verify proof
-    let params_time_start = Instant::now();
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+    // Time to verify proof
+    let params_time_start = Instant::now();
     assert!(
         verify_proof::<KZGCommitmentScheme<Bn256>, VerifierGWC<Bn256>, _, _, _>(
             &params,
@@ -349,8 +349,6 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
     println!("Time to generate pk {:?}", params_time);
 
     // Proof generation
-    // Time to create proof
-    let params_time_start = Instant::now();
     let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
     
     let instances = circuit.instance(); // Public inputs as Vec<Vec<Fr>>
@@ -358,6 +356,8 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
     let final_instances: Vec<&[&[Fr]]> = vec![&instance_slices];
     let final_instances_ref: &[&[&[Fr]]] = &final_instances;
 
+    // Time to create proof
+    let params_time_start = Instant::now();
     create_proof::<KZGCommitmentScheme<Bn256>, ProverGWC<Bn256>, _, _, _, _>(
         &params,
         &pk,
@@ -384,10 +384,10 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
     println!("Time to write proof to file {:?}", params_time);
 
     // Proof verification
-    // Time to verify proof
-    let params_time_start = Instant::now();
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+    // Time to verify proof
+    let params_time_start = Instant::now();
     assert!(
         verify_proof::<KZGCommitmentScheme<Bn256>, VerifierGWC<Bn256>, _, _, _>(
             &params,
