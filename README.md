@@ -1,33 +1,55 @@
 # ZKP Chiquito
 
-Chiquito is a high-level structured language for implementing zero knowledge proof (ZKP) applications. This is a re-designed version, derived from [chiquito](https://github.com/privacy-scaling-explorations/chiquito) tailored to ZKP, including the range check, parameter generation, proof generation and verification, etc.
+**Chiquito** is a high-level, structured domain-specific language (DSL) for implementing zero-knowledge proof (ZKP) applications. This is a redesigned fork of [privacy-scaling-explorations/chiquito](https://github.com/privacy-scaling-explorations/chiquito), optimized for ZKP workflows including range checks, parameter generation, proof generation, and verification, etc.
 
-Follow the instructions and information at [chiquito](https://github.com/privacy-scaling-explorations/chiquito) ZKP DSL for more details.
+## Features
 
-To install and use, please ensure the following conditions are satisfied:
+- High-level ZKP circuit design
+- Integrated range checking primitives
+- Streamlined proof generation and verification
+- Plonkish backend with compatibility bug fixes
+- Python-Rust interoperability via PyO3
 
-    - Rust installation: 
-		+ Version: 1.83+
-		+ Installation: https://rust-lang.org/tools/install/
-		+ Check the installed version: `rustc --version`
-		
-	- Python installation:
-		+ Version: 3.10+
-		+ Installation: https://www.python.org/downloads/
-		
-	- Check PyO3:	https://pyo3.rs/v0.28.2/index.html
+## Prerequisites
 
-    - Create a new Python virtualenv: `python -m venv .venv` at a desired directory.
-	- Load the environment: `source .venv/bin/activate`
-	- Install `maturin`, just a Python package,  developed to work with PyO3 and provides the most "batteries included" experience, especially if you are aiming to publish to PyPI. https://www.maturin.rs/installation.html or https://pyo3.rs/main/getting-started
+### Rust
+- **Version**: 1.83 or higher
+- **Install**: [rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+- **Verify**: `rustc --version`
 
-    Clone this re-designed Chiquito with `git clone https://github.com/thanhquanse/shin-chiquito.git`
+### Python
+- **Version**: 3.10 or higher
+- **Install**: [python.org/downloads](https://www.python.org/downloads/)
 
-    Make sure you are still in the virtualenv.
-		+ Run `pip install -r requirements.txt` to install the required libraries.
-		+ Run `maturin develop` to build the re-designed Chiquito.
-	
-	Note that the framework requires plonkish backend defined in `Cargo.toml`, which is fixed some bugs and tailored to the framework, so in case you use another, please make sure it is compatible.
+### PyO3 & Maturin
+- [PyO3 Documentation](https://pyo3.rs/v0.28.2/index.html)
+- [Maturin Installation](https://www.maturin.rs/installation.html)
 
-# Fix build type annotation error if any
-vi /<home>/.cargo/git/checkouts/zkp-sparql-plonkish-<c1a0bfd5c0d67691/e0125fe>/plonkish_backend/src/backend/hyperplonk/util.rs
+## Quick Start
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/thanhquanse/shin-chiquito.git
+   cd shin-chiquito```
+
+2. **Set up Python virtual environment**:
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+3. **Install dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    maturin develop
+
+## Backend Requirements
+This framework uses a customized Plonkish backend defined in Cargo.toml. The backend includes bug fixes. If using alternative backends, ensure compatibility.
+
+## Troubleshooting
+If you encounter type annotation errors during build, edit the file for the error lines:
+```bash 
+vi ~/.cargo/git/checkouts/zkp-sparql-plonkish-xxx/plonkish_backend/src/backend/hyperplonk/util.rs
+```
+
+## Documentation
+For detailed usage, refer to the original: [Chiquito documentation](https://github.com/privacy-scaling-explorations/chiquito).
