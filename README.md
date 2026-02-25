@@ -29,8 +29,9 @@
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/thanhquanse/shin-chiquito.git
-   cd shin-chiquito```
+   wget -O zkpchiquito.zip https://anonymous.4open.science/api/repo/chiquito-9B54/zip
+   unzip zkpchiquito.zip -d ./path/to/zkpchiquito
+   cd ./path/to/zkpchiquito```
 
 2. **Set up Python virtual environment**:
     ```bash
