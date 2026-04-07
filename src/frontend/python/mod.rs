@@ -31,15 +31,14 @@ use crate::{
 
 use core::result::Result;
 use halo2_proofs::{
-    dev::MockProver, halo2curves::bn256::{Bn256, Fr, G1Affine}, 
-    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
-    poly::kzg::{commitment::{KZGCommitmentScheme, ParamsKZG},
-    multiopen::{ProverGWC, VerifierGWC}, strategy::SingleStrategy}, transcript::{Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer}
+    dev::MockProver, halo2curves::{bn256::{Bn256, Fr, G1Affine}, pasta::{pallas, vesta, EqAffine, Fp}},  plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
+    poly::{commitment::ParamsProver, ipa::{commitment::{IPACommitmentScheme, ParamsIPA},
+    multiopen::{ProverIPA, VerifierIPA}, strategy::SingleStrategy}, VerificationStrategy}, transcript::{Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer}
 };
 use halo2_proofs::poly::commitment::Params;
 use rand::rngs::OsRng;
 use std::time::Instant;
-use std::{fs::File, io::Write, path::Path, io::BufWriter, io::BufReader};
+use std::{fs::File, fs::OpenOptions, io::Write, path::Path, io::BufWriter, io::BufReader};
 use serde::de::{self, Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
 use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
@@ -113,6 +112,26 @@ fn add_assignment_generator_to_rust_id(
         let circuit_map_store = circuit_map.get_mut(&rust_id).unwrap();
         circuit_map_store.2 = Some(assignment_generator);
     });
+}
+
+fn print_and_log(message: &str, log_path: &str) {
+    // Open the file in append mode (or create it if it doesn't exist)
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(log_path);
+
+    match file {
+        Ok(mut file) => {
+            match writeln!(file, "{}", message) {
+                Ok(()) => (),
+                Err(e) => eprintln!("Failed to write to file: {}", e),
+            }
+        }
+        Err(e) => eprintln!("Failed to open file: {}", e),
+    }
+    println!("{:?}", message);
 }
 
 /// Compile a `ChiquitoHalo2SuperCircuit` object from a list of `rust_ids`, each corresponding to a
@@ -200,30 +219,35 @@ pub fn chiquito_halo2_mock_prover(witness_json: &str, rust_id: UUID, k: usize) {
     }
 }
 
-pub fn chiquito_create_param_file(param_path: &str, k: u32) -> Result<ParamsKZG<Bn256>, std::io::Error> {
+pub fn chiquito_create_param_file(param_path: &str, k: u32, log_path: &str) -> Result<ParamsIPA::<G1Affine>, std::io::Error> {
     let params_time_start = Instant::now();
     
-    let params = ParamsKZG::<Bn256>::setup(k, OsRng);
-    let f = File::create(param_path)?;
-    let mut writer = BufWriter::new(f);
+    // let params = ProverIPA::<ParamsIPA::<vesta::Affine>>::setup(k, OsRng);
+    let params: ParamsIPA<G1Affine> = ParamsIPA::new(k);
+    let mut f = std::fs::File::create(&param_path).unwrap();
+    // let f = File::create(param_path)?;
+    // let mut writer = BufWriter::new(f);
 
-    let _ = params.write(&mut writer);
+    // let _ = params.write(&mut writer);
+    params.write(&mut f).unwrap();
 
-    println!("Time to generate params {:?}", params_time_start.elapsed());
+    // println!("Time to generate params {:?}", params_time_start.elapsed());
+    let message = format!("Time to generate params {:?}", params_time_start.elapsed());
+    print_and_log(&message, log_path);
 
     Ok(params)
 }
 
-fn chiquito_read_param_file(param_path: &str) -> Result<ParamsKZG<Bn256>, std::io::Error> {
+fn chiquito_read_param_file(param_path: &str) -> Result<ParamsIPA::<G1Affine>, std::io::Error> {
     let f = File::open(param_path)?;
-    let mut reader = BufReader::new(f);
+    let mut reader = std::fs::File::open(&param_path).unwrap();
 
-    let params = ParamsKZG::<Bn256>::read(&mut reader)?;
+    let params = ParamsIPA::<G1Affine>::read(&mut reader).unwrap();
 
     Ok(params)
 }
 
-pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &str, proof_path: &str) {
+pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &str, proof_path: &str, log_path: &str) {
     let trace_witness: TraceWitness<Fr> =
         serde_json::from_str(witness_json).expect("Json deserialization to TraceWitness failed.");
     let (_, compiled, assignment_generator) = rust_id_to_halo2(rust_id);
@@ -232,20 +256,29 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
         assignment_generator.map(|g| g.generate_with_witness(trace_witness)),
     );
 
-    println!("INFO: param_path: {param_path}, proof_path: {proof_path}");
+    // println!("INFO: param_path: {param_path}, proof_path: {proof_path}");
+
+    // Write the message to the file with a newline
+    let message = format!("INFO: param_path: {:?}, proof_path: {:?}", param_path, proof_path);
+    print_and_log(&message, log_path);
+
     let params = chiquito_read_param_file(param_path).expect("Failed to read params");
 
     // Time to generate verification key (vk)
     let params_time_start = Instant::now();
     let vk = keygen_vk(&params, &circuit).expect("keygen_vk should not fail");
     let params_time = params_time_start.elapsed();
-    println!("Time to generate vk {:?}", params_time);
+    // println!("Time to generate vk {:?}", params_time);
+    let message = format!("Time to generate vk {:?}", params_time);
+    print_and_log(&message, log_path);
 
     // Time to generate proving key (pk)
     let params_time_start = Instant::now();
     let pk = keygen_pk(&params, vk.clone(), &circuit).expect("keygen_pk should not fail");
     let params_time = params_time_start.elapsed();
-    println!("Time to generate pk {:?}", params_time);
+    // println!("Time to generate pk {:?}", params_time);
+    let message = format!("Time to generate pk {:?}", params_time);
+    print_and_log(&message, log_path);
 
     // Proof generation
     let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
@@ -257,7 +290,7 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
 
     // Time to create proof
     let params_time_start = Instant::now();
-    create_proof::<KZGCommitmentScheme<Bn256>, ProverGWC<Bn256>, _, _, _, _>(
+    create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(
         &params,
         &pk,
         &[circuit.clone()],
@@ -266,10 +299,12 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
         &mut transcript,
     )
     .expect("Proof creation failed");
+    let params_time = params_time_start.elapsed();
+    // println!("Time to generate proof {:?}", params_time);
+    let message = format!("Time to generate proof {:?}", params_time);
+    print_and_log(&message, log_path);
 
     let proof = transcript.finalize();
-    let params_time = params_time_start.elapsed();
-    println!("Time to generate proof {:?}", params_time);
 
     // Write proof to file
     let params_time_start = Instant::now();
@@ -277,10 +312,13 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
         .expect("Failed to create proof file")
         .write_all(&proof)
         .expect("Failed to write proof");
-    println!("Proof written to: {}", proof_path);
-
+    // println!("Proof written to: {}", proof_path);
+    let message = format!("Proof written to: {}", proof_path);
+    print_and_log(&message, log_path);
     let params_time = params_time_start.elapsed();
-    println!("Time to write proof to file {:?}", params_time);
+    // println!("Time to write proof to file {:?}", params_time);
+    let message = format!("Time to write proof to file {:?}", params_time);
+    print_and_log(&message, log_path);
 
     // Proof verification
     let strategy = SingleStrategy::new(&params);
@@ -288,7 +326,7 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
     // Time to verify proof
     let params_time_start = Instant::now();
     assert!(
-        verify_proof::<KZGCommitmentScheme<Bn256>, VerifierGWC<Bn256>, _, _, _>(
+        verify_proof(
             &params,
             pk.get_vk(),
             strategy,
@@ -299,11 +337,20 @@ pub fn chiquito_generate_proof(witness_json: &str, rust_id: UUID, param_path: &s
         "Proof verification failed"
     );
     let params_time = params_time_start.elapsed();
-    println!("Time to verify proof {:?}", params_time);
+    // println!("Time to verify proof {:?}", params_time);
+    let message = format!("Time to verify proof {:?}", params_time);
+    print_and_log(&message, log_path);
 }
 
-pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness: HashMap<UUID, &str>, param_path: &str, proof_path: &str) {
+pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness: HashMap<UUID, &str>, param_path: &str, proof_path: &str, log_path: &str) {
     let mut super_circuit_ctx = SuperCircuitContext::<Fr, ()>::default();
+
+    // Open the file in append mode (or create it if it doesn't exist)
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(log_path);
 
     // super_circuit def
     let config = config(SingleRowCellManager {}, SimpleStepSelectorBuilder {});
@@ -333,20 +380,26 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
 
     let circuit = ChiquitoHalo2SuperCircuit::new(compiled, super_assignments);
 
-    println!("INFO: param_path: {param_path}, proof_path: {proof_path}");
+    // println!("INFO: param_path: {param_path}, proof_path: {proof_path}");
+    let message = format!("INFO: param_path: {param_path}, proof_path: {proof_path}");
+    print_and_log(&message, log_path);
     let params = chiquito_read_param_file(param_path).expect("Failed to read params");;
 
     // Time to generate verification key (vk)
     let params_time_start = Instant::now();
     let vk = keygen_vk(&params, &circuit).expect("keygen_vk should not fail");
     let params_time = params_time_start.elapsed();
-    println!("Time to generate vk {:?}", params_time);
+    // println!("Time to generate vk {:?}", params_time);
+    let message = format!("Time to generate vk {:?}", params_time);
+    print_and_log(&message, log_path);
 
     // Time to generate proving key (pk)
     let params_time_start = Instant::now();
     let pk = keygen_pk(&params, vk.clone(), &circuit).expect("keygen_pk should not fail");
     let params_time = params_time_start.elapsed();
-    println!("Time to generate pk {:?}", params_time);
+    // println!("Time to generate pk {:?}", params_time);
+    let message = format!("Time to generate pk {:?}", params_time);
+    print_and_log(&message, log_path);
 
     // Proof generation
     let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
@@ -358,7 +411,7 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
 
     // Time to create proof
     let params_time_start = Instant::now();
-    create_proof::<KZGCommitmentScheme<Bn256>, ProverGWC<Bn256>, _, _, _, _>(
+    create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(
         &params,
         &pk,
         &[circuit.clone()],
@@ -367,6 +420,10 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
         &mut transcript,
     )
     .expect("Proof creation failed");
+    let params_time = params_time_start.elapsed();
+    // println!("Time to generate proof {:?}", params_time);
+    let message = format!("Time to generate proof {:?}", params_time);
+    print_and_log(&message, log_path);
 
     let proof = transcript.finalize();
     let params_time = params_time_start.elapsed();
@@ -378,10 +435,14 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
         .expect("Failed to create proof file")
         .write_all(&proof)
         .expect("Failed to write proof");
-    println!("Proof written to: {}", proof_path);
+    // println!("Proof written to: {}", proof_path);
+    let message = format!("Proof written to: {}", proof_path);
+    print_and_log(&message, log_path);
 
     let params_time = params_time_start.elapsed();
-    println!("Time to write proof to file {:?}", params_time);
+    // println!("Time to write proof to file {:?}", params_time);
+    let message = format!("Time to write proof to file {:?}", params_time);
+    print_and_log(&message, log_path);
 
     // Proof verification
     let strategy = SingleStrategy::new(&params);
@@ -389,7 +450,7 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
     // Time to verify proof
     let params_time_start = Instant::now();
     assert!(
-        verify_proof::<KZGCommitmentScheme<Bn256>, VerifierGWC<Bn256>, _, _, _>(
+        verify_proof(
             &params,
             pk.get_vk(),
             strategy,
@@ -400,7 +461,9 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
         "Proof verification failed"
     );
     let params_time = params_time_start.elapsed();
-    println!("Time to verify proof {:?}", params_time);
+    // println!("Time to verify proof {:?}", params_time);
+    let message = format!("Time to verify proof {:?}", params_time);
+    print_and_log(&message, log_path);
 }
 
 struct CircuitVisitor;
@@ -2081,7 +2144,7 @@ fn lteq(lhs: &PyLong, rhs: &PyLong) -> u32 {
 #[pyfunction]
 fn neq(lhs: &PyLong, rhs: &PyLong) -> u32 {
     let a = lhs.extract().expect("Error: PyLong lhs (a) conversion failed.");
-    let b = rhs.extract().expect("Error: PyLong rhs (b) conversion failed.");
+    let b =rhs.extract().expect("Error: PyLong rhs (b) conversion failed.");
 
     let rs = is_not_equal(a, b);
 
@@ -2177,22 +2240,23 @@ fn super_circuit_halo2_mock_prover(rust_ids: &PyList, super_witness: &PyDict, k:
 }
 
 #[pyfunction]
-fn create_param_file(path: &PyString, k: &PyLong) {
-    let _ = chiquito_create_param_file(path.to_str().expect("PyString conversion failed."), k.extract().expect("PyLong conversion failed."));
+fn create_param_file(path: &PyString, k: &PyLong, log_path: &PyString) {
+    let _ = chiquito_create_param_file(path.to_str().expect("PyString conversion failed."), k.extract().expect("PyLong conversion failed."), log_path.to_str().expect("PyString conversion failed."));
 }
 
 #[pyfunction]
-fn generate_proof_file(witness_json: &PyString, rust_id: &PyLong, param_path: &PyString, proof_path: &PyString){
+fn generate_proof_file(witness_json: &PyString, rust_id: &PyLong, param_path: &PyString, proof_path: &PyString, log_path: &PyString){
     chiquito_generate_proof(
         witness_json.to_str().expect("PyString conversion failed."),
         rust_id.extract().expect("PyLong conversion failed."),
         param_path.extract().expect("PyString conversion failed."),
         proof_path.to_str().expect("PyString conversion failed."),
+        log_path.to_str().expect("PyString conversion failed.")
     )
 }
 
 #[pyfunction]
-fn generate_super_circuit_proof_file(rust_ids: &PyList, super_witness: &PyDict, param_path: &PyString, proof_path: &PyString) {
+fn generate_super_circuit_proof_file(rust_ids: &PyList, super_witness: &PyDict, param_path: &PyString, proof_path: &PyString, log_path: &PyString) {
     let uuids = rust_ids
         .iter()
         .map(|rust_id| {
@@ -2226,6 +2290,7 @@ fn generate_super_circuit_proof_file(rust_ids: &PyList, super_witness: &PyDict, 
         super_witness,
         param_path.extract().expect("PyString conversion failed."),
         proof_path.to_str().expect("PyString conversion failed."),
+        log_path.to_str().expect("PyString conversion failed.")
     );
 }
 

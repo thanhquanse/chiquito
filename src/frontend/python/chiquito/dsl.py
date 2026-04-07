@@ -89,7 +89,7 @@ class SuperCircuit:
             list(self.ast.sub_circuits.keys()), witness_json, k
         )
 
-    def create_param_file(self: Circuit, path: str, k: int):
+    def create_param_file(self: Circuit, path: str, k: int, log_path: str):
         if k <= 0:
             raise ValueError(
                 "ParamGen: must define k greater than zero when calling create_param_file()"
@@ -98,9 +98,9 @@ class SuperCircuit:
             raise ValueError(
                 "ParamGen: must define a path to store params when calling create_param_file()"
             )
-        rust_chiquito.create_param_file(path, k)
+        rust_chiquito.create_param_file(path, k, log_path)
 
-    def generate_proof_file(self: SuperCircuit, super_witness: Dict[int, TraceWitness], param_path: str, proof_path: str):
+    def generate_proof_file(self: SuperCircuit, super_witness: Dict[int, TraceWitness], param_path: str, proof_path: str, log_path: str):
         witness_json = {}
         for rust_id, witness in super_witness.items():
             if rust_id not in self.ast.sub_circuits:
@@ -109,7 +109,7 @@ class SuperCircuit:
                 )
             witness_json[rust_id] = witness.get_witness_json()
         rust_chiquito.generate_super_circuit_proof_file(
-            list(self.ast.sub_circuits.keys()), witness_json, param_path, proof_path
+            list(self.ast.sub_circuits.keys()), witness_json, param_path, proof_path, log_path
         )
 
 
@@ -266,7 +266,7 @@ class Circuit:
             )
         return rust_chiquito.read_param_file(path)
     
-    def generate_proof_file(self: Circuit, witness: TraceWitness, param_path: str, proof_path: str):
+    def generate_proof_file(self: Circuit, witness: TraceWitness, param_path: str, proof_path: str, log_path: str):
         if witness is None or param_path is None or proof_path is None:
             raise ValueError(
                 "ProofGen: must define witness, params and proof file path to generate"
@@ -275,7 +275,7 @@ class Circuit:
             ast_json: str = self.get_ast_json()
             self.rust_id: int = rust_chiquito.ast_to_halo2(ast_json)
         witness_json: str = witness.get_witness_json()
-        rust_chiquito.generate_proof_file(witness_json, self.rust_id, param_path, proof_path)
+        rust_chiquito.generate_proof_file(witness_json, self.rust_id, param_path, proof_path, log_path)
 
     def to_pil(
         self: Circuit, witness: TraceWitness, circuit_name: str = "Circuit"

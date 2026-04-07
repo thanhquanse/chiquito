@@ -3,7 +3,7 @@ name = "chiquito"
 version = "0.1.2023110800"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-authors = ["Leo Lara <leo@leolara.me>"]
+authors = ["Anonymous"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -30,8 +30,8 @@ num-bigint = { version = "0.4", features = ["rand"] }
 uuid = { version = "1.4.0", features = ["v1", "rng"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-hyperplonk_benchmark = { git = "https://github.com/thanhquanse/zkp-sparql-plonkish.git", branch = "main", package = "benchmark" }
-plonkish_backend = { git = "https://github.com/thanhquanse/zkp-sparql-plonkish.git", branch = "main", package = "plonkish_backend" }
+hyperplonk_benchmark = { git = "https://github.com/thanhquanse/plonkish.git", branch = "main", package = "benchmark" }
+plonkish_backend = { git = "https://github.com/thanhquanse/plonkish.git", branch = "main", package = "plonkish_backend" }
 regex = "1"
 rand = "0.8"
 bincode = "2.0.1"
