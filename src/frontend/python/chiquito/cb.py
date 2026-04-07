@@ -102,6 +102,9 @@ def lteq(a: int, b: int) -> int:
 def neq(a: int, b: int) -> int:
     return rust_chiquito.neq(a, b)
 
+def incl(a: list[list[int]], b: list[list[int]], k: int) -> int:
+    return rust_chiquito.incl(a, b, k)
+
 def select(
     selector: ToConstraint, when_true: ToConstraint, when_false: ToConstraint
 ) -> Constraint:

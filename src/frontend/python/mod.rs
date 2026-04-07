@@ -18,7 +18,8 @@ use crate::{
         },
         ir::{assignments::AssignmentGenerator, sc::MappingContext},
         comparator::lteq::is_lteq,
-        comparator::neq::is_not_equal
+        comparator::neq::is_not_equal,
+        comparator::incl::is_incl,
     },
     poly::Expr,
     sbpir::{
@@ -426,8 +427,6 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
     print_and_log(&message, log_path);
 
     let proof = transcript.finalize();
-    let params_time = params_time_start.elapsed();
-    println!("Time to generate proof {:?}", params_time);
 
     // Write proof to file
     let params_time_start = Instant::now();
@@ -2120,14 +2119,29 @@ mod tests {
     #[test]
     fn test_lteq() {
         let rs = is_lteq(3, 2);
-        println!("-------Test result------: {rs}");
+        println!("-------test_lteq result------: {rs}");
     }
 
     #[test]
     fn test_neq() {
         // let rs = is_lessthan(14747347665328045516, 976711286267936480);
         let rs = is_not_equal(2, 97);
-        println!("-------Test result------: {rs}");
+        println!("-------test_neq result------: {rs}");
+    }
+
+    #[test]
+    fn test_incl() {
+        let base_results = vec![
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            vec![11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        ];
+        let results = vec![
+            vec![1, 2, 3, 4, 5, 6, 6, 6, 6, 10],
+            vec![11, 12, 13, 14, 15, 16, 16, 16, 16, 20],
+        ];
+        let k = 10;
+        let rs = is_incl(base_results, results, k);
+        println!("-------test_incl result------: {rs}");
     }
 }
 
@@ -2147,6 +2161,47 @@ fn neq(lhs: &PyLong, rhs: &PyLong) -> u32 {
     let b =rhs.extract().expect("Error: PyLong rhs (b) conversion failed.");
 
     let rs = is_not_equal(a, b);
+
+    return rs;
+}
+
+#[pyfunction]
+fn incl(base_results: &PyList, results: &PyList, k: &PyLong) -> u32 {
+    let a = base_results
+        .iter()
+        .map(|inner_list| {
+            inner_list
+                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+    let b = results
+        .iter()
+        .map(|inner_list| {
+            inner_list
+                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+    let k = k.extract().expect("Error: PyLong k conversion failed.");
+
+    let rs = is_incl(a, b, k);
 
     return rs;
 }
@@ -2308,5 +2363,6 @@ fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(super_circuit_halo2_mock_prover, m)?)?;
     m.add_function(wrap_pyfunction!(lteq, m)?)?;
     m.add_function(wrap_pyfunction!(neq, m)?)?;
+    m.add_function(wrap_pyfunction!(incl, m)?)?;
     Ok(())
 }
