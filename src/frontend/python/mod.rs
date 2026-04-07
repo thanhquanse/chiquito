@@ -426,6 +426,8 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
     print_and_log(&message, log_path);
 
     let proof = transcript.finalize();
+    let params_time = params_time_start.elapsed();
+    println!("Time to generate proof {:?}", params_time);
 
     // Write proof to file
     let params_time_start = Instant::now();
