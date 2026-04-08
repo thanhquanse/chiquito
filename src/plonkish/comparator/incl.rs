@@ -6,20 +6,20 @@ use halo2_proofs::halo2curves::ff::PrimeField;
 use halo2_proofs::{arithmetic::Field, circuit::*, plonk::*};
 use halo2_proofs::{circuit::Value, dev::MockProver, halo2curves::pasta::Fp};
 
-const TABLE_SIZE: usize = 10;
-const NUM_INCLUSIONS: usize = 10;
+const TABLE_SIZE: usize = 400000;
+const NUM_INCLUSIONS: usize = 400000;
 
 #[derive(Clone, Copy)] // helps with some internal halo2 operations
                        // Circuit is now generic over the sizes of Table A and the number of inclusions from Table B.
                        // This makes the sizes fully dynamic — you specify them only when you create the circuit instance.
-struct MyCircuit<F, const TABLE_A_SIZE: usize, const NUM_INCLUSIONS: usize> {
-    pub base_results_part1: [Value<F>; TABLE_A_SIZE],
-    pub base_results_part2: [Value<F>; TABLE_A_SIZE],
+struct MyCircuit<F, const TABLESIZE: usize, const NUM_INCLUSIONS: usize> {
+    pub base_results_part1: [Value<F>; TABLESIZE],
+    pub base_results_part2: [Value<F>; TABLESIZE],
     pub inclusion_indices: [u16; NUM_INCLUSIONS],
 }
 
-impl<F: PrimeField, const TABLE_A_SIZE: usize, const NUM_INCLUSIONS: usize> Circuit<F>
-    for MyCircuit<F, TABLE_A_SIZE, NUM_INCLUSIONS>
+impl<F: PrimeField, const TABLESIZE: usize, const NUM_INCLUSIONS: usize> Circuit<F>
+    for MyCircuit<F, TABLESIZE, NUM_INCLUSIONS>
 {
     type Config = InclusionCheckConfig;
     type FloorPlanner = SimpleFloorPlanner;
@@ -27,8 +27,8 @@ impl<F: PrimeField, const TABLE_A_SIZE: usize, const NUM_INCLUSIONS: usize> Circ
     fn without_witnesses(&self) -> Self {
         Self {
             // All private witness values become "unknown" (standard halo2 pattern)
-            base_results_part1: [Value::unknown(); TABLE_A_SIZE],
-            base_results_part2: [Value::unknown(); TABLE_A_SIZE],
+            base_results_part1: [Value::unknown(); TABLESIZE],
+            base_results_part2: [Value::unknown(); TABLESIZE],
             // inclusion_indices can be zero-filled — they are only used when a real witness is provided
             inclusion_indices: [0; NUM_INCLUSIONS],
         }
@@ -51,7 +51,7 @@ impl<F: PrimeField, const TABLE_A_SIZE: usize, const NUM_INCLUSIONS: usize> Circ
         let chip = InclusionCheckChip::<F>::construct(config);
 
         let mut row_cells: Vec<Option<(AssignedCell<F, F>, AssignedCell<F, F>)>> =
-            vec![None; TABLE_A_SIZE];
+            vec![None; TABLESIZE];
 
         // loop over the usernames array and assign the rows
         for _i in 0..self.base_results_part1.len() {
@@ -103,6 +103,10 @@ impl<F: PrimeField, const TABLE_A_SIZE: usize, const NUM_INCLUSIONS: usize> Circ
 }
 
 pub fn is_incl(base_results: Vec<Vec<u64>>, results: Vec<Vec<u64>>, k: u32) -> u32 {
+    if base_results[0].len() != TABLE_SIZE {
+        panic!("Fatal Error: Expected base_results {} elements, but found {}.", TABLE_SIZE, base_results[0].len());
+    }
+
     let _base_results_part1_tmp: [u64; TABLE_SIZE] = base_results[0].clone()
         .try_into()
         .expect("Length of base_results[0] must match TABLE_SIZE");
@@ -118,6 +122,10 @@ pub fn is_incl(base_results: Vec<Vec<u64>>, results: Vec<Vec<u64>>, k: u32) -> u
     let base_results_part2: [Value<Fp>; TABLE_SIZE] = _base_results_part2_tmp.map(|x| {
         Value::known(Fp::from(x))
     });
+
+    if results[0].len() != TABLE_SIZE {
+        panic!("Fatal Error: Expected results {} elements, but found {}.", TABLE_SIZE, results[0].len());
+    }
 
     let _results_part1_tmp: [u64; TABLE_SIZE] = results[0].clone()
         .try_into()
@@ -144,7 +152,7 @@ pub fn is_incl(base_results: Vec<Vec<u64>>, results: Vec<Vec<u64>>, k: u32) -> u
             let mut found = false;
             for i in 0..TABLE_SIZE {
                 if _base_results_part1_tmp[i] == b_user && _base_results_part2_tmp[i] == b_bal {
-                    println!("Value: {}", i);
+                    // println!("Value: {}", i);
                     inclusion_indices[j] = i as u16;
                     found = true;
                     break;
