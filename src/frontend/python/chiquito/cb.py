@@ -105,6 +105,9 @@ def neq(a: int, b: int) -> int:
 def incl(a: list[list[int]], b: list[list[int]], k: int) -> int:
     return rust_chiquito.incl(a, b, k)
 
+def mseq(input: list[list[int]], table: list[list[int]], k: int) -> int:
+    return rust_chiquito.mseq(input, table, k)
+
 def select(
     selector: ToConstraint, when_true: ToConstraint, when_false: ToConstraint
 ) -> Constraint:
