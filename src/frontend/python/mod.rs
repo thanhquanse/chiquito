@@ -20,6 +20,7 @@ use crate::{
         comparator::lteq::is_lteq,
         comparator::neq::is_not_equal,
         comparator::incl::is_incl,
+        comparator::mseq::is_mseq
     },
     poly::Expr,
     sbpir::{
@@ -2143,6 +2144,21 @@ mod tests {
         let rs = is_incl(base_results, results, k);
         println!("-------test_incl result------: {rs}");
     }
+
+    #[test]
+    fn test_mseq() {
+        let input = vec![
+            vec![1, 2],
+            vec![3, 4],
+        ];
+        let table = vec![
+            vec![3, 4],
+            vec![1, 2],
+        ];
+        let k = 10;
+        let rs = is_mseq(input, table, k);
+        println!("-------test_mseq result------: {rs}");
+    }
 }
 
 #[pyfunction]
@@ -2166,7 +2182,7 @@ fn neq(lhs: &PyLong, rhs: &PyLong) -> u32 {
 }
 
 #[pyfunction]
-fn incl(base_results: &PyList, results: &PyList, k: &PyLong) -> u32 {
+fn incl(base_results: &PyList, results: &PyList, _k: &PyLong) -> u32 {
     let a = base_results
         .iter()
         .map(|inner_list| {
@@ -2199,10 +2215,52 @@ fn incl(base_results: &PyList, results: &PyList, k: &PyLong) -> u32 {
                 .collect::<Vec<u64>>()
         })
         .collect::<Vec<Vec<u64>>>();
-    let k = k.extract().expect("Error: PyLong k conversion failed.");
+    let k = _k.extract().expect("Error: PyLong k conversion failed.");
 
     let rs = is_incl(a, b, k);
 
+    return rs;
+}
+
+#[pyfunction]
+fn mseq(_input: &PyList, _table: &PyList, _k: &PyLong) -> u32 {
+    let input = _input
+        .iter()
+        .map(|inner_list| {
+            inner_list
+                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+
+    let table = _table.iter()
+        .map(|inner_list| {
+            inner_list
+                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+
+    let k = _k.extract().expect("Error: PyLong k conversion failed.");
+
+    let rs = is_mseq(input, table, k);
+    
     return rs;
 }
 
@@ -2364,5 +2422,6 @@ fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lteq, m)?)?;
     m.add_function(wrap_pyfunction!(neq, m)?)?;
     m.add_function(wrap_pyfunction!(incl, m)?)?;
+    m.add_function(wrap_pyfunction!(mseq, m)?)?;
     Ok(())
 }

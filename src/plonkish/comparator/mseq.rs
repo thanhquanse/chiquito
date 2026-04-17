@@ -1,16 +1,15 @@
-use super::super::chips::permutation_any::{PermAnyChip, PermAnyConfig};
+use crate::operator::chips::permutation_any::{PermAnyChip, PermAnyConfig};
 use halo2_proofs::{
     arithmetic::Field, circuit::*, dev::MockProver, halo2curves::bn256::Fr as Fp, plonk::*,
 };
-use std::marker::PhantomData;
 
 #[derive(Default)]
-struct MyCircuit<F: Field> {
-    pub input1: Vec<Vec<F>>,
+struct MseqCircuit<F: Field> {
+    pub input: Vec<Vec<F>>,
     pub table: Vec<Vec<F>>,
 }
 
-impl<F: Field> Circuit<F> for MyCircuit<F> {
+impl<F: Field> Circuit<F> for MseqCircuit<F> {
     type Config = PermAnyConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -47,7 +46,7 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
             || "witness",
             |mut region| {
                 // Enable selectors for each row of data
-                for i in 0..self.input1.len() {
+                for i in 0..self.input.len() {
                     config.q_perm1.enable(&mut region, i)?;
                 }
                 for i in 0..self.table.len() {
@@ -55,7 +54,7 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
                 }
 
                 // Call assign1 (Note: ensure row counts match for shuffle)
-                chip.assign1(&mut region, self.input1.clone(), self.table.clone())?;
+                chip.assign1(&mut region, self.input.clone(), self.table.clone())?;
                 Ok(())
             },
         )
@@ -75,6 +74,44 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
     }
 }
 
+// fn convert_to_field<F: Field>(input: Vec<Vec<u64>>) -> Vec<Vec<F>> {
+//     input
+//         .into_iter()
+//             .map(|row| row.into_iter().map(|v| Fp::from(v)).collect())
+//             .collect();
+// }
+
+pub fn is_mseq(input: Vec<Vec<u64>>, table: Vec<Vec<u64>>, k: u32) -> u32 {
+    let _input  = input.into_iter()
+            .map(|row| row.into_iter().map(|v| Fp::from(v)).collect())
+            .collect();
+    let _table = table.into_iter()
+            .map(|row| row.into_iter().map(|v| Fp::from(v)).collect())
+            .collect();
+
+    let circuit = MseqCircuit::<Fp> {
+        input: _input,
+        table: _table
+    };
+
+    let public_input = vec![];
+
+    let prover = MockProver::run(k, &circuit, public_input).unwrap();
+    
+    let result = prover.verify();
+    // println!("Verification result: {:?}", result); // Debug log
+    match result {
+        Ok(()) => {
+            println!("Verification succeeded");
+            1
+        }
+        Err(e) => {
+            println!("Multiset equality with permutation verification failed: {:?}", e);
+            0
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,22 +120,28 @@ mod tests {
     fn test_perm_success() {
         let k = 4;
 
-        // For a shuffle/permutation to pass, the multisets must be IDENTICAL
-        // Here: 2 rows, 2 columns each.
-        let input1 = vec![
-            vec![Fp::from(1), Fp::from(2)],
-            vec![Fp::from(3), Fp::from(4)],
-            vec![Fp::from(3), Fp::from(4)],
+        let input: Vec<Vec<u64>> = vec![
+            vec![1, 2],
+            vec![3, 4],
+            vec![3, 4],
         ];
 
-        // Same values, different order (Permutation)
-        let table = vec![
-            vec![Fp::from(3), Fp::from(4)],
-            vec![Fp::from(1), Fp::from(2)],
-            vec![Fp::from(3), Fp::from(4)],
+        let table: Vec<Vec<u64>> = vec![
+            vec![3, 4],
+            vec![1, 2],
+            vec![3, 4],
         ];
 
-        let circuit = MyCircuit::<Fp> { input1, table };
+        is_mseq(input.clone(), table.clone(), k);
+
+        let _input  = input.into_iter()
+            .map(|row| row.into_iter().map(|v| Fp::from(v)).collect())
+            .collect();
+        let _table = table.into_iter()
+            .map(|row| row.into_iter().map(|v| Fp::from(v)).collect())
+            .collect();
+
+        let circuit = MseqCircuit::<Fp> { input: _input, table: _table };
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
@@ -106,10 +149,10 @@ mod tests {
     #[test]
     fn test_perm_failure() {
         let k = 4;
-        let input1 = vec![vec![Fp::from(1), Fp::from(2)]];
+        let input = vec![vec![Fp::from(1), Fp::from(2)]];
         let table = vec![vec![Fp::from(9), Fp::from(9)]]; // Different values
 
-        let circuit = MyCircuit::<Fp> { input1, table };
+        let circuit = MseqCircuit::<Fp> { input, table };
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert!(prover.verify().is_err());
     }
