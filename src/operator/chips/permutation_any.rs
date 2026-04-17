@@ -12,6 +12,7 @@ use halo2_proofs::{circuit::*, plonk::*, poly::Rotation};
 // The chip checks that the input value is less than the target value
 // This gets done by performing a lookup between the input value and the advice_table
 // pub trait Field: PrimeField<Repr = [u8; 32]> {}
+// https://rareskills.io/post/permutation-argument
 
 // impl<F> Field for F where F: PrimeField<Repr = [u8; 32]> {}
 #[derive(Debug, Clone)]

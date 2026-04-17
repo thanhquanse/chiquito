@@ -1,4 +1,4 @@
-use std::result;
+use std::thread;
 
 use crate::operator::chips::inclusion_check::{InclusionCheckChip, InclusionCheckConfig};
 
@@ -6,8 +6,8 @@ use halo2_proofs::halo2curves::ff::PrimeField;
 use halo2_proofs::{arithmetic::Field, circuit::*, plonk::*};
 use halo2_proofs::{circuit::Value, dev::MockProver, halo2curves::pasta::Fp};
 
-const TABLE_SIZE: usize = 400000;
-const NUM_INCLUSIONS: usize = 400000;
+const TABLE_SIZE: usize = 100000;
+const NUM_INCLUSIONS: usize = 100000;
 
 #[derive(Clone, Copy)] // helps with some internal halo2 operations
                        // Circuit is now generic over the sizes of Table A and the number of inclusions from Table B.
@@ -102,7 +102,7 @@ impl<F: PrimeField, const TABLESIZE: usize, const NUM_INCLUSIONS: usize> Circuit
     type Params = ();
 }
 
-pub fn is_incl(base_results: Vec<Vec<u64>>, results: Vec<Vec<u64>>, k: u32) -> u32 {
+pub fn _is_incl(base_results: Vec<Vec<u64>>, results: Vec<Vec<u64>>, k: u32) -> u32 {
     if base_results[0].len() != TABLE_SIZE {
         panic!("Fatal Error: Expected base_results {} elements, but found {}.", TABLE_SIZE, base_results[0].len());
     }
@@ -191,6 +191,66 @@ pub fn is_incl(base_results: Vec<Vec<u64>>, results: Vec<Vec<u64>>, k: u32) -> u
         Err(e) => {
             println!("Verification failed: {:?}", e);
             0
+        }
+    }
+}
+
+// pub fn is_incl(base_results: Vec<Vec<u64>>, results: Vec<Vec<u64>>, k: u32) -> u32 {
+//     let handle = thread::Builder::new()
+//         .stack_size(64 * 1024 * 1024 * 5)  // 64 MiB stack
+//         .spawn(move || -> Result<u32, Box<dyn std::error::Error + Send + Sync + 'static>> {
+//             let ok: u32 = _is_incl(base_results, results, k); // Takes ownership via `move`
+//             Ok(ok)
+//         })
+//         .expect("Spawn failed");
+    
+//     match handle.join() {
+//         Ok(Ok(result)) => result,  // Double unwrap: thread join -> inner result
+//         Ok(Err(e)) => {
+//             panic!("Inner error: {}", e);
+//         }
+//         Err(e) => {
+//             // Print panic details
+//             if let Some(s) = e.downcast_ref::<&str>() {
+//                 panic!("Thread panic 1: {}", s);
+//             } else if let Some(s) = e.downcast_ref::<String>() {
+//                 println!("Thread panic 2: {}", s);
+//             }
+//             panic!("Thread panic 3: {:?}", e);
+//         }
+//     }
+// }
+
+pub fn is_incl(base_results: Vec<Vec<u64>>, results: Vec<Vec<u64>>, k: u32) -> u32 {
+    let handle = thread::Builder::new()
+        .stack_size(64 * 1024 * 1024 * 500)
+        .spawn(move || -> Result<u32, Box<dyn std::error::Error + Send + Sync + 'static>> {
+            // You can add some logging here if you want to see that the thread really starts
+            let ok = _is_incl(base_results, results, k);
+            Ok(ok)
+        })
+        .expect("Failed to spawn thread");
+
+    match handle.join() {
+        Ok(Ok(result)) => result,
+
+        Ok(Err(e)) => panic!("Inner Result error: {}", e),
+
+        Err(e) => {
+            // Improved panic handling
+            if let Some(s) = e.downcast_ref::<&'static str>() {
+                panic!("Thread panicked with &str: {}", s);
+            } else if let Some(s) = e.downcast_ref::<String>() {
+                panic!("Thread panicked with String: {}", s);
+            } else if let Some(boxed) = e.downcast_ref::<Box<dyn std::any::Any + Send>>() {
+                // Sometimes the payload is nested
+                println!("Thread panicked with Box<dyn Any + Send>: {:?}", boxed);
+            } else {
+                println!("Thread panicked with unknown payload: {:?}", e);
+            }
+
+            // Re-panic so the backtrace is shown (very useful!)
+            std::panic::resume_unwind(e);
         }
     }
 }
