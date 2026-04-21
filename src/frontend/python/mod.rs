@@ -2132,17 +2132,44 @@ mod tests {
 
     #[test]
     fn test_incl() {
+        // Generate 400,000 elements (e.g., 1 to 400,000)
         let base_results = vec![
-            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            vec![11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+            (1..=400000).collect::<Vec<u64>>(),
+            (400001..=800000).collect::<Vec<u64>>(),
         ];
-        let results = vec![
-            vec![1, 2, 3, 4, 5, 6, 6, 6, 6, 10],
-            vec![11, 12, 13, 14, 15, 16, 16, 16, 16, 20],
-        ];
-        let k = 10;
+
+        // Generate a modified version where some elements differ
+        let mut results = base_results.clone();
+
+        let k = 20; // Adjust k based on your specific logic requirements
         let rs = is_incl(base_results, results, k);
-        println!("-------test_incl result------: {rs}");
+        
+        println!("-------test_incl result (400k elements)------: {rs}");
+    }
+
+    #[test]
+    fn test_incl_failed() {
+        // Generate 400,000 elements (e.g., 1 to 400,000)
+        let base_results = vec![
+            (1..=400000).collect::<Vec<u64>>(),
+            (400001..=800000).collect::<Vec<u64>>(),
+        ];
+
+        // Generate a modified version where some elements differ
+        let mut results = base_results.clone();
+        
+        // Modify a slice of the data to test the inclusion logic
+        // For example, changing indices 100 to 200 to all be 999
+        for row in results.iter_mut() {
+            for i in 100..200 {
+                row[i] = 999;
+            }
+        }
+
+        let k = 20; // Adjust k based on your specific logic requirements
+        let rs = is_incl(base_results, results, k);
+        
+        println!("-------test_incl result (400k elements)------: {rs}");
     }
 
     #[test]
