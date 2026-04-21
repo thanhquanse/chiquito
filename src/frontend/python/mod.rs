@@ -18,7 +18,9 @@ use crate::{
         },
         ir::{assignments::AssignmentGenerator, sc::MappingContext},
         comparator::lteq::is_lteq,
-        comparator::neq::is_not_equal
+        comparator::neq::is_not_equal,
+        comparator::incl::is_incl,
+        comparator::mseq::is_mseq
     },
     poly::Expr,
     sbpir::{
@@ -426,8 +428,6 @@ pub fn chiquito_super_circuit_generate_proof(rust_ids: Vec<UUID>, super_witness:
     print_and_log(&message, log_path);
 
     let proof = transcript.finalize();
-    let params_time = params_time_start.elapsed();
-    println!("Time to generate proof {:?}", params_time);
 
     // Write proof to file
     let params_time_start = Instant::now();
@@ -2120,14 +2120,71 @@ mod tests {
     #[test]
     fn test_lteq() {
         let rs = is_lteq(3, 2);
-        println!("-------Test result------: {rs}");
+        println!("-------test_lteq result------: {rs}");
     }
 
     #[test]
     fn test_neq() {
         // let rs = is_lessthan(14747347665328045516, 976711286267936480);
         let rs = is_not_equal(2, 97);
-        println!("-------Test result------: {rs}");
+        println!("-------test_neq result------: {rs}");
+    }
+
+    #[test]
+    fn test_incl() {
+        // Generate 400,000 elements (e.g., 1 to 400,000)
+        let base_results = vec![
+            (1..=400000).collect::<Vec<u64>>(),
+            (400001..=800000).collect::<Vec<u64>>(),
+        ];
+
+        // Generate a modified version where some elements differ
+        let mut results = base_results.clone();
+
+        let k = 20; // Adjust k based on your specific logic requirements
+        let rs = is_incl(base_results, results, k);
+        
+        println!("-------test_incl result (400k elements)------: {rs}");
+    }
+
+    #[test]
+    fn test_incl_failed() {
+        // Generate 400,000 elements (e.g., 1 to 400,000)
+        let base_results = vec![
+            (1..=400000).collect::<Vec<u64>>(),
+            (400001..=800000).collect::<Vec<u64>>(),
+        ];
+
+        // Generate a modified version where some elements differ
+        let mut results = base_results.clone();
+        
+        // Modify a slice of the data to test the inclusion logic
+        // For example, changing indices 100 to 200 to all be 999
+        for row in results.iter_mut() {
+            for i in 100..200 {
+                row[i] = 999;
+            }
+        }
+
+        let k = 20; // Adjust k based on your specific logic requirements
+        let rs = is_incl(base_results, results, k);
+        
+        println!("-------test_incl result (400k elements)------: {rs}");
+    }
+
+    #[test]
+    fn test_mseq() {
+        let input = vec![
+            vec![1, 2],
+            vec![3, 4],
+        ];
+        let table = vec![
+            vec![3, 4],
+            vec![1, 2],
+        ];
+        let k = 10;
+        let rs = is_mseq(input, table, k);
+        println!("-------test_mseq result------: {rs}");
     }
 }
 
@@ -2148,6 +2205,89 @@ fn neq(lhs: &PyLong, rhs: &PyLong) -> u32 {
 
     let rs = is_not_equal(a, b);
 
+    return rs;
+}
+
+#[pyfunction]
+fn incl(base_results: &PyList, results: &PyList, _k: &PyLong) -> u32 {
+    let a = base_results
+        .iter()
+        .map(|inner_list| {
+            inner_list
+                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+    let b = results
+        .iter()
+        .map(|inner_list| {
+            inner_list
+                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+    let k = _k.extract().expect("Error: PyLong k conversion failed.");
+
+    let rs = is_incl(a, b, k);
+
+    return rs;
+}
+
+#[pyfunction]
+fn mseq(_input: &PyList, _table: &PyList, _k: &PyLong) -> u32 {
+    let input = _input
+        .iter()
+        .map(|inner_list| {
+            inner_list
+                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+
+    let table = _table.iter()
+        .map(|inner_list| {
+            inner_list
+                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+
+    let k = _k.extract().expect("Error: PyLong k conversion failed.");
+
+    let rs = is_mseq(input, table, k);
+    
     return rs;
 }
 
@@ -2308,5 +2448,7 @@ fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(super_circuit_halo2_mock_prover, m)?)?;
     m.add_function(wrap_pyfunction!(lteq, m)?)?;
     m.add_function(wrap_pyfunction!(neq, m)?)?;
+    m.add_function(wrap_pyfunction!(incl, m)?)?;
+    m.add_function(wrap_pyfunction!(mseq, m)?)?;
     Ok(())
 }
