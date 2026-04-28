@@ -22,3 +22,5 @@ pub mod permutation_any_test;
 pub mod poseidon_test;
 pub mod safe_accumulator;
 pub mod utils;
+pub mod lookup_table;
+pub mod lookup_table_rdf;
