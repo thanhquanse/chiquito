@@ -108,6 +108,9 @@ def incl(a: list[list[int]], b: list[list[int]], k: int) -> int:
 def mseq(input: list[list[int]], table: list[list[int]], k: int) -> int:
     return rust_chiquito.mseq(input, table, k)
 
+def mseq_nonperm(ms1: list[list[int]], ms2: list[list[int]], k: int) -> int:
+    return rust_chiquito.mseq_nonperm(ms1, ms2, k)
+
 def select(
     selector: ToConstraint, when_true: ToConstraint, when_false: ToConstraint
 ) -> Constraint:

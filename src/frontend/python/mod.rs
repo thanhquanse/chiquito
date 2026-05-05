@@ -20,7 +20,8 @@ use crate::{
         comparator::lteq::is_lteq,
         comparator::neq::is_not_equal,
         comparator::incl::is_incl,
-        comparator::mseq::is_mseq
+        comparator::mseq::is_mseq,
+        comparator::mseq_nonperm::is_mseq_nonperm,
     },
     poly::Expr,
     sbpir::{
@@ -39,6 +40,8 @@ use halo2_proofs::{
 };
 use halo2_proofs::poly::commitment::Params;
 use rand::rngs::OsRng;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use std::time::Instant;
 use std::{fs::File, fs::OpenOptions, io::Write, path::Path, io::BufWriter, io::BufReader};
 use serde::de::{self, Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
@@ -2173,7 +2176,7 @@ mod tests {
     }
 
     #[test]
-    fn test_mseq() {
+    fn test_mseq_simple() {
         let input = vec![
             vec![1, 2],
             vec![3, 4],
@@ -2184,7 +2187,51 @@ mod tests {
         ];
         let k = 10;
         let rs = is_mseq(input, table, k);
+        println!("-------test_mseq_simple result------: {rs}");
+    }
+
+    #[test]
+    fn test_mseq() {
+        let ms1 = vec![
+            (1..=400000).collect::<Vec<u64>>(),
+            (400001..=800000).collect::<Vec<u64>>(),
+        ];
+
+        // Generate a modified version where some elements differ
+        let mut ms2 = ms1.clone();
+
+        let mut rng = thread_rng();
+        ms2.shuffle(&mut rng);
+        let k = 20;
+        let rs = is_mseq(ms1, ms2, k);
         println!("-------test_mseq result------: {rs}");
+    }
+
+    #[test]
+    fn test_mseq_nonperm() {
+        let ms1 = vec![
+            (1..=400000).collect::<Vec<u64>>(),
+            (400001..=800000).collect::<Vec<u64>>(),
+        ];
+
+        // Generate a modified version where some elements differ
+        let mut ms2 = ms1.clone();
+
+        let mut rng = thread_rng();
+        ms2.shuffle(&mut rng);
+        
+        // Modify a slice of the data to test the inclusion logic
+        // For example, changing indices 100 to 200 to all be 999
+        // for row in ms2.iter_mut() {
+        //     for i in 100..200 {
+        //         row[i] = 999;
+        //     }
+        // }
+
+        let k = 20; // Adjust k based on your specific logic requirements
+        let rs = is_mseq_nonperm(ms1, ms2, k);
+        
+        println!("-------test_mseq_nonperm result ------: {rs}");
     }
 }
 
@@ -2288,6 +2335,46 @@ fn mseq(_input: &PyList, _table: &PyList, _k: &PyLong) -> u32 {
 
     let rs = is_mseq(input, table, k);
     
+    return rs;
+}
+
+#[pyfunction]
+fn mseq_nonperm(_ms1: &PyList, _ms2: &PyList, _k: &PyLong) -> u32 {
+    let ms1 = _ms1
+        .iter()
+        .map(|inner_list| {
+            inner_list                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+
+    let ms2 = _ms2.iter()
+        .map(|inner_list| {
+            inner_list                .downcast::<PyList>()
+                .expect("PyAny downcast to PyList failed.")
+                .iter()
+                .map(|x| {
+                    x.downcast::<PyLong>()
+                        .expect("PyAny downcast to PyLong failed.")
+                        .extract::<u64>()
+                        .expect("PyLong to u64 conversion failed.")
+                })
+                .collect::<Vec<u64>>()
+        })
+        .collect::<Vec<Vec<u64>>>();
+
+    let k = _k.extract().expect("Error: PyLong k conversion failed.");
+
+    let rs = is_mseq_nonperm(ms1, ms2, k);
+
     return rs;
 }
 
@@ -2450,5 +2537,6 @@ fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(neq, m)?)?;
     m.add_function(wrap_pyfunction!(incl, m)?)?;
     m.add_function(wrap_pyfunction!(mseq, m)?)?;
+    m.add_function(wrap_pyfunction!(mseq_nonperm, m)?)?;
     Ok(())
 }
