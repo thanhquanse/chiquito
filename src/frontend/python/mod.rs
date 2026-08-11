@@ -22,6 +22,7 @@ use crate::{
         comparator::incl::is_incl,
         comparator::mseq::is_mseq,
         comparator::mseq_nonperm::is_mseq_nonperm,
+        comparator::purpose_tree_check_v2::purpose_check
     },
     poly::Expr,
     sbpir::{
@@ -1246,7 +1247,9 @@ impl<'de> Deserialize<'de> for SBPIR<Fr, ()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::println;
+
+use super::*;
 
     #[test]
     #[ignore]
@@ -2233,6 +2236,25 @@ mod tests {
         
         println!("-------test_mseq_nonperm result ------: {rs}");
     }
+
+    #[test]
+    fn test_purpose_check() {
+        // marketing (id=1) -> direct-marketing (id=2)
+        let rs1 = purpose_check(1, 2);
+        println!("Test purpose check pass case 1: {rs1}");
+
+        // marketing (id=1) -> special-offers (id=4)
+        let rs2 = purpose_check(1, 4);
+        println!("Test purpose check pass case 2: {rs2}");
+
+        // marketing (id=1) -> advertising (id=10) : SIBLING, should FAIL
+        let rs3 = purpose_check(1, 10);
+        println!("Test purpose check failed case 3: {rs3}");
+
+        // direct-marketing (id=2) -> marketing (id=1) : ANCESTOR, should FAIL
+        let rs4 = purpose_check(2, 1);
+        println!("Test purpose check failed case 4: {rs4}");
+    }
 }
 
 #[pyfunction]
@@ -2248,9 +2270,19 @@ fn lteq(lhs: &PyLong, rhs: &PyLong) -> u32 {
 #[pyfunction]
 fn neq(lhs: &PyLong, rhs: &PyLong) -> u32 {
     let a = lhs.extract().expect("Error: PyLong lhs (a) conversion failed.");
-    let b =rhs.extract().expect("Error: PyLong rhs (b) conversion failed.");
+    let b = rhs.extract().expect("Error: PyLong rhs (b) conversion failed.");
 
     let rs = is_not_equal(a, b);
+
+    return rs;
+}
+
+#[pyfunction]
+fn verify_purpose(parent: &PyLong, child: &PyLong) -> u32 {
+    let _parent = parent.extract().expect("Error: PyLong parent (a) conversion failed.");
+    let _child = child.extract().expect("Error: PyLong child (b) conversion failed.");
+
+    let rs = purpose_check(_parent, _child);
 
     return rs;
 }
@@ -2538,5 +2570,6 @@ fn rust_chiquito(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(incl, m)?)?;
     m.add_function(wrap_pyfunction!(mseq, m)?)?;
     m.add_function(wrap_pyfunction!(mseq_nonperm, m)?)?;
+    m.add_function(wrap_pyfunction!(verify_purpose, m)?)?;
     Ok(())
 }

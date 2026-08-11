@@ -5,3 +5,5 @@ pub mod mseq;
 pub mod insortcmp;
 pub mod exsortcmp;
 pub mod mseq_nonperm;
+pub mod purpose_tree_check_v1;
+pub mod purpose_tree_check_v2;
