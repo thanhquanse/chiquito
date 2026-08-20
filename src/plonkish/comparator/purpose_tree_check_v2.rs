@@ -15,6 +15,8 @@
 //! pasta_curves = "0.5"
 //! ff = "0.12"
 
+use std::println;
+
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{Layouter, Value, Chip, SimpleFloorPlanner},
@@ -29,57 +31,144 @@ use crate::operator::chips::lessthan_or_equal_generic::{
     LtEqGenericChip, LtEqGenericConfig, LtEqGenericInstruction,
 };
 
-const NUM_BYTES: usize = 7; // max label value is 77, fits in 7 bits
+const NUM_BYTES: usize = 8; // max label value is 77, fits in 7 bits
 
 // ============================================================
 // Tree Data (precomputed DFS In-Out labels)
 // ============================================================
 
-const NUM_NODES: usize = 39;
+const NUM_NODES: usize = 84;
 
 /// Static tree nodes with their DFS in-out labels.
 /// Generated from the purpose tree via Algorithm 1 (DFS In-Out Labeling).
+// const _TREE_NODES: [(u64, u64, u64); NUM_NODES] = [
+//     // (node_id, left, right)
+//     ( 0,  0, 77),  // general-purpose
+//     ( 1,  1, 18),  // general-purpose/marketing
+//     ( 2,  2, 11),  // general-purpose/marketing/direct-marketing
+//     ( 3,  3,  8),  // general-purpose/marketing/direct-marketing/d-email
+//     ( 4,  4,  5),  // general-purpose/marketing/direct-marketing/d-email/special-offers
+//     ( 5,  6,  7),  // general-purpose/marketing/direct-marketing/d-email/service-updates
+//     ( 6,  9, 10),  // general-purpose/marketing/direct-marketing/d-phone
+//     ( 7, 12, 17),  // general-purpose/marketing/third-party-marketing
+//     ( 8, 13, 14),  // general-purpose/marketing/third-party-marketing/t-email
+//     ( 9, 15, 16),  // general-purpose/marketing/third-party-marketing/t-phone
+//     (10, 19, 24),  // general-purpose/advertising
+//     (11, 20, 21),  // general-purpose/advertising/trial
+//     (12, 22, 23),  // general-purpose/advertising/promotional
+//     (13, 25, 30),  // general-purpose/shipping
+//     (14, 26, 27),  // general-purpose/shipping/new-delivery
+//     (15, 28, 29),  // general-purpose/shipping/product-return
+//     (16, 31, 36),  // general-purpose/experimenting
+//     (17, 32, 33),  // general-purpose/experimenting/new-product
+//     (18, 34, 35),  // general-purpose/experimenting/feedback
+//     (19, 37, 42),  // general-purpose/Product
+//     (20, 38, 39),  // general-purpose/Product/profiling
+//     (21, 40, 41),  // general-purpose/Product/experiementing
+//     (22, 43, 44),  // general-purpose/Offer
+//     (23, 45, 54),  // general-purpose/Drug
+//     (24, 46, 47),  // general-purpose/Drug/research
+//     (25, 48, 49),  // general-purpose/Drug/clinical-trial
+//     (26, 50, 51),  // general-purpose/Drug/treatment
+//     (27, 52, 53),  // general-purpose/Drug/sales
+//     (28, 55, 64),  // general-purpose/Paper
+//     (29, 56, 57),  // general-purpose/Paper/publication
+//     (30, 58, 59),  // general-purpose/Paper/review
+//     (31, 60, 61),  // general-purpose/Paper/citation
+//     (32, 62, 63),  // general-purpose/Paper/chapter
+//     (33, 65, 74),  // general-purpose/ConfWorkshop
+//     (34, 66, 67),  // general-purpose/ConfWorkshop/organization
+//     (35, 68, 69),  // general-purpose/ConfWorkshop/presentation
+//     (36, 70, 71),  // general-purpose/ConfWorkshop/meeting
+//     (37, 72, 73),  // general-purpose/ConfWorkshop/connection
+//     (38, 75, 76),  // general-purpose/Proceeding
+// ];
+
 const TREE_NODES: [(u64, u64, u64); NUM_NODES] = [
-    // (node_id, left, right)
-    ( 0,  0, 77),  // general-purpose
-    ( 1,  1, 18),  // general-purpose/marketing
-    ( 2,  2, 11),  // general-purpose/marketing/direct-marketing
-    ( 3,  3,  8),  // general-purpose/marketing/direct-marketing/d-email
-    ( 4,  4,  5),  // general-purpose/marketing/direct-marketing/d-email/special-offers
-    ( 5,  6,  7),  // general-purpose/marketing/direct-marketing/d-email/service-updates
-    ( 6,  9, 10),  // general-purpose/marketing/direct-marketing/d-phone
-    ( 7, 12, 17),  // general-purpose/marketing/third-party-marketing
-    ( 8, 13, 14),  // general-purpose/marketing/third-party-marketing/t-email
-    ( 9, 15, 16),  // general-purpose/marketing/third-party-marketing/t-phone
-    (10, 19, 24),  // general-purpose/advertising
-    (11, 20, 21),  // general-purpose/advertising/trial
-    (12, 22, 23),  // general-purpose/advertising/promotional
-    (13, 25, 30),  // general-purpose/shipping
-    (14, 26, 27),  // general-purpose/shipping/new-delivery
-    (15, 28, 29),  // general-purpose/shipping/product-return
-    (16, 31, 36),  // general-purpose/experimenting
-    (17, 32, 33),  // general-purpose/experimenting/new-product
-    (18, 34, 35),  // general-purpose/experimenting/feedback
-    (19, 37, 42),  // general-purpose/Product
-    (20, 38, 39),  // general-purpose/Product/profiling
-    (21, 40, 41),  // general-purpose/Product/experiementing
-    (22, 43, 44),  // general-purpose/Offer
-    (23, 45, 54),  // general-purpose/Drug
-    (24, 46, 47),  // general-purpose/Drug/research
-    (25, 48, 49),  // general-purpose/Drug/clinical-trial
-    (26, 50, 51),  // general-purpose/Drug/treatment
-    (27, 52, 53),  // general-purpose/Drug/sales
-    (28, 55, 64),  // general-purpose/Paper
-    (29, 56, 57),  // general-purpose/Paper/publication
-    (30, 58, 59),  // general-purpose/Paper/review
-    (31, 60, 61),  // general-purpose/Paper/citation
-    (32, 62, 63),  // general-purpose/Paper/chapter
-    (33, 65, 74),  // general-purpose/ConfWorkshop
-    (34, 66, 67),  // general-purpose/ConfWorkshop/organization
-    (35, 68, 69),  // general-purpose/ConfWorkshop/presentation
-    (36, 70, 71),  // general-purpose/ConfWorkshop/meeting
-    (37, 72, 73),  // general-purpose/ConfWorkshop/connection
-    (38, 75, 76),  // general-purpose/Proceeding
+    ( 0,   0, 167),  // general-purpose
+    ( 1,   1, 108),  // general-purpose/marketing
+    ( 2,   2, 101),  // general-purpose/marketing/direct-marketing
+    ( 3,   3,  98),  // general-purpose/marketing/direct-marketing/d-email
+    ( 4,   4,  95),  // general-purpose/marketing/direct-marketing/d-email/special-offers
+    ( 5,   5,  94),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1
+    ( 6,   6,  93),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2
+    ( 7,   7,  92),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3
+    ( 8,   8,  91),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4
+    ( 9,   9,  90),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5
+    (10,  10,  89),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6
+    (11,  11,  88),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7
+    (12,  12,  87),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8
+    (13,  13,  86),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9
+    (14,  14,  85),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10
+    (15,  15,  84),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11
+    (16,  16,  83),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12
+    (17,  17,  82),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13
+    (18,  18,  81),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14
+    (19,  19,  80),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15
+    (20,  20,  79),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16
+    (21,  21,  78),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17
+    (22,  22,  77),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18
+    (23,  23,  76),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19
+    (24,  24,  75),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20
+    (25,  25,  74),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21
+    (26,  26,  73),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22
+    (27,  27,  72),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23
+    (28,  28,  71),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24
+    (29,  29,  70),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25
+    (30,  30,  69),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26
+    (31,  31,  68),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27
+    (32,  32,  67),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28
+    (33,  33,  66),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29
+    (34,  34,  65),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30
+    (35,  35,  64),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31
+    (36,  36,  63),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32
+    (37,  37,  62),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33
+    (38,  38,  61),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34
+    (39,  39,  60),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35
+    (40,  40,  59),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36
+    (41,  41,  58),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36/chain-37
+    (42,  42,  57),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36/chain-37/chain-38
+    (43,  43,  56),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36/chain-37/chain-38/chain-39
+    (44,  44,  55),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36/chain-37/chain-38/chain-39/chain-40
+    (45,  45,  54),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36/chain-37/chain-38/chain-39/chain-40/chain-41
+    (46,  46,  53),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36/chain-37/chain-38/chain-39/chain-40/chain-41/chain-42
+    (47,  47,  52),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36/chain-37/chain-38/chain-39/chain-40/chain-41/chain-42/chain-43
+    (48,  48,  51),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36/chain-37/chain-38/chain-39/chain-40/chain-41/chain-42/chain-43/chain-44
+    (49,  49,  50),  // general-purpose/marketing/direct-marketing/d-email/special-offers/chain-1/chain-2/chain-3/chain-4/chain-5/chain-6/chain-7/chain-8/chain-9/chain-10/chain-11/chain-12/chain-13/chain-14/chain-15/chain-16/chain-17/chain-18/chain-19/chain-20/chain-21/chain-22/chain-23/chain-24/chain-25/chain-26/chain-27/chain-28/chain-29/chain-30/chain-31/chain-32/chain-33/chain-34/chain-35/chain-36/chain-37/chain-38/chain-39/chain-40/chain-41/chain-42/chain-43/chain-44/chain-45
+    (50,  96,  97),  // general-purpose/marketing/direct-marketing/d-email/service-updates
+    (51,  99, 100),  // general-purpose/marketing/direct-marketing/d-phone
+    (52, 102, 107),  // general-purpose/marketing/third-party-marketing
+    (53, 103, 104),  // general-purpose/marketing/third-party-marketing/t-email
+    (54, 105, 106),  // general-purpose/marketing/third-party-marketing/t-phone
+    (55, 109, 114),  // general-purpose/advertising
+    (56, 110, 111),  // general-purpose/advertising/trial
+    (57, 112, 113),  // general-purpose/advertising/promotional
+    (58, 115, 120),  // general-purpose/shipping
+    (59, 116, 117),  // general-purpose/shipping/new-delivery
+    (60, 118, 119),  // general-purpose/shipping/product-return
+    (61, 121, 126),  // general-purpose/experimenting
+    (62, 122, 123),  // general-purpose/experimenting/new-product
+    (63, 124, 125),  // general-purpose/experimenting/feedback
+    (64, 127, 132),  // general-purpose/Product
+    (65, 128, 129),  // general-purpose/Product/profiling
+    (66, 130, 131),  // general-purpose/Product/experiementing
+    (67, 133, 134),  // general-purpose/Offer
+    (68, 135, 144),  // general-purpose/Drug
+    (69, 136, 137),  // general-purpose/Drug/research
+    (70, 138, 139),  // general-purpose/Drug/clinical-trial
+    (71, 140, 141),  // general-purpose/Drug/treatment
+    (72, 142, 143),  // general-purpose/Drug/sales
+    (73, 145, 154),  // general-purpose/Paper
+    (74, 146, 147),  // general-purpose/Paper/publication
+    (75, 148, 149),  // general-purpose/Paper/review
+    (76, 150, 151),  // general-purpose/Paper/citation
+    (77, 152, 153),  // general-purpose/Paper/chapter
+    (78, 155, 164),  // general-purpose/ConfWorkshop
+    (79, 156, 157),  // general-purpose/ConfWorkshop/organization
+    (80, 158, 159),  // general-purpose/ConfWorkshop/presentation
+    (81, 160, 161),  // general-purpose/ConfWorkshop/meeting
+    (82, 162, 163),  // general-purpose/ConfWorkshop/connection
+    (83, 165, 166),  // general-purpose/Proceeding
 ];
 
 // ============================================================
@@ -498,6 +587,8 @@ mod tests {
 
 pub fn purpose_check(parent: u64, child: u64) -> u32 {
     use halo2_proofs::dev::MockProver;
+
+    // println!("Input: {:?} - {:?}", parent, child);
     
     let circuit = ContainmentCircuit{a_id: parent, b_id: child};
 
